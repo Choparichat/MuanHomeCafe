@@ -1493,12 +1493,15 @@ function saveOrder(){
   const o=JSON.parse(JSON.stringify(orderDraft));
   o.items=(o.items||[]).filter(it=>it.menuId||(it.name||'').trim()||num(it.qty)>0);
   if(!o.items.length){alert('ใส่อย่างน้อย 1 เมนู');return;}
-  o.id=uid();
-  state.orders.push(o);save();
+  const idx=o.id?state.orders.findIndex(x=>x.id===o.id):-1;
+  if(idx>=0){state.orders[idx]=o;}else{o.id=uid();state.orders.push(o);}
+  save();
   orderDraft=newOrderDraft();
   renderOrderForm();renderOrders();
-  const t=document.getElementById('odSaved');if(t){t.textContent='✓ บันทึกออเดอร์แล้ว';setTimeout(()=>{if(t)t.textContent='';},1500);}
+  const t=document.getElementById('odSaved');if(t){t.textContent=idx>=0?'✓ แก้ไขออเดอร์แล้ว':'✓ บันทึกออเดอร์แล้ว';setTimeout(()=>{if(t)t.textContent='';},1500);}
 }
+function editOrder(id){const o=state.orders.find(x=>x.id===id);if(!o)return;orderDraft=JSON.parse(JSON.stringify(o));renderOrderForm();renderOrders();const f=document.getElementById('odForm');if(f)f.scrollIntoView({behavior:'smooth',block:'start'});}
+function cancelEditOrder(){orderDraft=newOrderDraft();renderOrderForm();}
 function delOrder(id){state.orders=state.orders.filter(o=>o.id!==id);save();renderOrders();}
 // ---- daily ad fee (ค่าโฆษณารายวัน) ----
 function dailyAdsFiltered(){const fm=document.getElementById('odFilterMonth').value;const fp=document.getElementById('odFilterPlat').value;return (state.dailyAds||[]).filter(a=>(!fm||(a.date||'').slice(0,7)===fm)&&(!fp||a.platform===fp));}
@@ -1526,6 +1529,7 @@ function renderAdSection(){
 function menuOptions(sel){return '<option value="">— พิมพ์ชื่อเอง —</option>'+state.menus.map(m=>`<option value="${m.id}" ${m.id===sel?'selected':''}>${esc(m.name||'(ไม่มีชื่อ)')}</option>`).join('');}
 function renderOrderForm(){
   const o=orderDraft;
+  const editing=o.id&&(state.orders||[]).some(x=>x.id===o.id);
   const platOpts=state.platforms.map(p=>`<option value="${esc(p.name)}" ${p.name===o.platform?'selected':''}>${esc(p.name)}</option>`).join('');
   const items=o.items.map((it,i)=>{
     const linked=!!it.menuId;
@@ -1540,6 +1544,7 @@ function renderOrderForm(){
     </div>`;
   }).join('');
   document.getElementById('odForm').innerHTML=`
+    ${editing?`<div style="background:#fff4e6;border:1px solid #f0c98a;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:13px;font-weight:600;color:var(--brand)">✎ กำลังแก้ไขออเดอร์ ${esc(o.code||'')} ${esc(o.date||'')} — กดบันทึกการแก้ไขเมื่อเสร็จ</div>`:''}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px">
       <div class="fld"><label>แพลตฟอร์ม</label><select onchange="odPlatChange(this.value)">${platOpts}</select></div>
       <div class="fld"><label>วันที่</label><input type="date" value="${esc(o.date)}" onchange="odSet('date',this.value)"></div>
@@ -1565,7 +1570,7 @@ function renderOrderForm(){
     </div>
     <div class="hint" style="margin:-4px 0 8px">📣 ค่าโฆษณาเป็น “รายวัน” ไม่ต้องกรอกในออเดอร์ — กรอกแยกครั้งเดียวต่อวันที่ส่วน “ค่าโฆษณารายวัน” ด้านล่าง</div>
     <div id="odPreview" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
-    <div style="display:flex;gap:10px;align-items:center"><button class="btn-primary btn-sm" onclick="saveOrder()">＋ บันทึกออเดอร์</button><span id="odSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
+    <div style="display:flex;gap:10px;align-items:center"><button class="btn-primary btn-sm" onclick="saveOrder()">${editing?'💾 บันทึกการแก้ไข':'＋ บันทึกออเดอร์'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelEditOrder()">ยกเลิก</button>`:''}<span id="odSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
   updateOdPreview();
 }
 function updateOdPreview(){
@@ -1615,7 +1620,7 @@ function renderOrders(){
       <td class="num" style="white-space:nowrap;font-weight:700;color:var(--plat)">฿${fmt(orderRevenueNet(o))}</td>
       <td class="num" style="white-space:nowrap">฿${fmt(orderCogs(o))}</td>
       <td class="num" style="white-space:nowrap;font-weight:700;color:${pf>=0?'var(--accent)':'var(--danger)'}">฿${fmt(pf)}</td>
-      <td><button class="del" style="color:var(--danger);background:none;padding:2px 6px;border-radius:6px" onclick="delOrder('${o.id}')">✕</button></td>
+      <td style="white-space:nowrap"><button class="btn-ghost btn-sm" style="padding:2px 8px" onclick="editOrder('${o.id}')" title="แก้ไข">✎</button> <button class="del" style="color:var(--danger);background:none;padding:2px 6px;border-radius:6px" onclick="delOrder('${o.id}')" title="ลบ">✕</button></td>
     </tr>`;}).join('')}</tbody></table>`
     : '<p class="hint">ยังไม่มีออเดอร์ในช่วงที่เลือก</p>';
 }
