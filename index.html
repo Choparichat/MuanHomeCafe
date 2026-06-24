@@ -278,6 +278,7 @@
       </div>
       <div id="odAds" style="margin:10px 0"></div>
       <div id="odSummary"></div>
+      <div id="odChart"></div>
       <div id="odBest" style="margin-top:10px"></div>
       <div id="odTable" style="margin-top:12px"></div>
     </div>
@@ -1507,6 +1508,18 @@ function delOrder(id){state.orders=state.orders.filter(o=>o.id!==id);save();rend
 function dailyAdsFiltered(){const fm=document.getElementById('odFilterMonth').value;const fp=document.getElementById('odFilterPlat').value;return (state.dailyAds||[]).filter(a=>(!fm||(a.date||'').slice(0,7)===fm)&&(!fp||a.platform===fp));}
 function dailyAdTotal(){return dailyAdsFiltered().reduce((s,a)=>s+num(a.amount),0);}
 function platDailyAd(name){return dailyAdsFiltered().filter(a=>a.platform===name).reduce((s,a)=>s+num(a.amount),0);}
+function feeGPamt(o){return o.feeMode==='baht'?(num(o.gpB)+num(o.gpvatB)):orderGross(o)*num(o.gp)/100;}
+function feeShipAmt(o){return o.feeMode==='baht'?num(o.shipB):orderGross(o)*num(o.ship)/100;}
+function donutChart(segs,title,centerVal){
+  const tot=segs.reduce((s,x)=>s+Math.max(0,x.v),0)||1;
+  const R=58,C=2*Math.PI*R;let acc=0;
+  const arcs=segs.filter(s=>s.v>0).map(s=>{const len=s.v/tot*C;const dash=len+' '+(C-len);const off=-acc;acc+=len;return `<circle cx="80" cy="80" r="${R}" fill="none" stroke="${s.c}" stroke-width="22" stroke-dasharray="${dash}" stroke-dashoffset="${off}" transform="rotate(-90 80 80)"/>`;}).join('');
+  const legend=segs.map(s=>`<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0"><span style="width:11px;height:11px;border-radius:3px;background:${s.c};display:inline-block;flex-shrink:0"></span><span style="flex:1">${s.label}</span><b style="white-space:nowrap">฿${fmt(s.v)}</b> <span class="hint">(${fmt(tot?s.v/tot*100:0)}%)</span></div>`).join('');
+  return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;margin-top:10px">
+    <svg viewBox="0 0 160 160" style="width:150px;height:150px;flex-shrink:0">${arcs}<text x="80" y="74" text-anchor="middle" font-size="9" fill="var(--muted)">${title}</text><text x="80" y="91" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">฿${fmt(centerVal)}</text></svg>
+    <div style="flex:1;min-width:190px">${legend}</div>
+  </div>`;
+}
 function addDailyAd(){const d=document.getElementById('adDate').value,p=document.getElementById('adPlat').value,amt=num(document.getElementById('adAmt').value);if(!(amt>0)){alert('ใส่จำนวนเงินค่าโฆษณา');return;}state.dailyAds=state.dailyAds||[];state.dailyAds.push({id:uid(),date:d||todayStr(),platform:p,amount:amt});save();renderOrders();}
 function delDailyAd(id){state.dailyAds=(state.dailyAds||[]).filter(a=>a.id!==id);save();renderOrders();}
 function renderAdSection(){
@@ -1576,7 +1589,7 @@ function renderOrderForm(){
 function updateOdPreview(){
   const el=document.getElementById('odPreview');if(!el)return;const o=orderDraft;
   const g=orderGross(o),f=orderFees(o),net=orderRevenueNet(o),cogs=orderCogs(o),pf=orderProfit(o);
-  el.innerHTML=`ยอดเต็ม <b>฿${fmt(g)}</b> · หักค่าธรรมเนียม −฿${fmt(f)} · ส่วนลด −฿${fmt(num(o.discount))} · เงินถึงร้าน <b style="color:var(--plat)">฿${fmt(net)}</b> · ต้นทุน ฿${fmt(cogs)} · กำไรสุทธิ <b style="color:${pf>=0?'var(--accent)':'var(--danger)'}">฿${fmt(pf)}</b>`;
+  el.innerHTML=`ยอดเต็ม <b>฿${fmt(g)}</b> · ส่วนลด −฿${fmt(num(o.discount))} · ยอดหลังหักส่วนลด <b>฿${fmt(g-num(o.discount))}</b> · หักค่าธรรมเนียม −฿${fmt(f)} · เงินถึงร้าน <b style="color:var(--plat)">฿${fmt(net)}</b> · ต้นทุน ฿${fmt(cogs)} · กำไรสุทธิ <b style="color:${pf>=0?'var(--accent)':'var(--danger)'}">฿${fmt(pf)}</b>`;
 }
 // ---- list/summary ----
 function ordersFiltered(){
@@ -1593,12 +1606,28 @@ function renderOrders(){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
       <div class="stat"><div class="label">ออเดอร์ / แก้ว</div><div class="value">${list.length} / ${cups}</div></div>
       <div class="stat"><div class="label">ยอดขายเต็ม</div><div class="value brown">฿${fmt(gross)}</div></div>
+      <div class="stat"><div class="label">ยอดขายหลังหักส่วนลด</div><div class="value brown">฿${fmt(gross-disc)}</div></div>
       <div class="stat"><div class="label">เงินถึงร้าน</div><div class="value" style="color:var(--plat)">฿${fmt(net)}</div></div>
       <div class="stat"><div class="label">กำไรสุทธิ</div><div class="value ${profit>=0?'green':''}" style="${profit<0?'color:var(--danger)':''}">฿${fmt(profit)}</div></div>
     </div>
     <div class="hint" style="margin-top:8px">ส่วนลดร้านออกรวม ฿${fmt(disc)} · ค่าธรรมเนียม (GP/ค่าส่ง) รวม ฿${fmt(sum(orderFees))} · ค่าโฆษณารายวันรวม ฿${fmt(adT)} · ต้นทุนรวม ฿${fmt(cogs)}</div>
     <div class="hint">${state.platforms.map(p=>{const sub=list.filter(o=>o.platform===p.name);const pad=platDailyAd(p.name);if(!sub.length&&!pad)return '';return `🛵 ${esc(p.name)}: ${sub.length} ออเดอร์ · เงินถึงร้าน ฿${fmt(sub.reduce((s,o)=>s+orderRevenueNet(o),0)-pad)} · กำไร ฿${fmt(sub.reduce((s,o)=>s+orderProfit(o),0)-pad)}`;}).filter(Boolean).join(' · ')}</div>`;
   renderAdSection();
+  // donut: รายรับ (ยอดขาย E-payment) vs รายจ่าย (GP, โฆษณา, ค่าส่วนลดค่าส่ง, ส่วนลดร้าน) → ที่เหลือ = เงินถึงร้าน
+  const gpSum=list.reduce((s,o)=>s+feeGPamt(o),0), shipSum=list.reduce((s,o)=>s+feeShipAmt(o),0);
+  const chEl=document.getElementById('odChart');
+  if(chEl){
+    if(gross>0){
+      const segs=[
+        {label:'เงินถึงร้าน (สุทธิ)',v:net,c:'var(--accent)'},
+        {label:'ค่า GP (+VAT)',v:gpSum,c:'#c0492f'},
+        {label:'ค่าโฆษณา',v:adT,c:'#d98c2b'},
+        {label:'ค่าส่วนลดค่าส่ง',v:shipSum,c:'#b07a3f'},
+        {label:'ส่วนลดร้านออก',v:disc,c:'#8a7f76'}
+      ].filter(s=>s.v>0);
+      chEl.innerHTML=donutChart(segs,'ยอดขาย E-payment',gross);
+    } else chEl.innerHTML='';
+  }
   // best sellers
   const tally={};
   list.forEach(o=>(o.items||[]).forEach(it=>{const nm=(it.name||'(ไม่ระบุ)').trim();tally[nm]=(tally[nm]||0)+num(it.qty);}));
