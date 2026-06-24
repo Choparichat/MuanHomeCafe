@@ -1455,7 +1455,7 @@ let orderDraft=null;
 function orderDraftItem(){return {menuId:'',name:'',qty:1,sweet:100,blend:false,price:0};}
 function platByName(nm){return (state.platforms||[]).find(p=>p.name===nm);}
 function newOrderDraft(){
-  const o={platform:(state.platforms[0]&&state.platforms[0].name)||'LINE MAN',date:todayStr(),time:'',code:'',customer:'',items:[orderDraftItem()],discount:0,gp:'',ad:'',ship:'',feeMode:'pct',gpB:'',gpvatB:'',adB:'',shipB:''};
+  const o={platform:(state.platforms[0]&&state.platforms[0].name)||'LINE MAN',date:todayStr(),time:'',code:'',customer:'',items:[orderDraftItem()],discount:0,gp:'',ad:'',ship:'',feeMode:'pct',gpB:'',gpvatB:'',adB:'',shipB:'',payType:'epay'};
   const p=platByName(o.platform);if(p){o.gp=p.gp;o.ad=adEff(p);o.ship=p.ship;}
   return o;
 }
@@ -1567,7 +1567,12 @@ function renderOrderForm(){
       <div class="fld"><label>เวลา</label><input type="time" value="${esc(o.time)}" onchange="odSet('time',this.value)"></div>
       <div class="fld"><label>รหัสออเดอร์</label><input value="${esc(o.code)}" oninput="odSet('code',this.value)" placeholder="เช่น #0545"></div>
       <div class="fld"><label>ชื่อลูกค้า</label><input value="${esc(o.customer)}" oninput="odSet('customer',this.value)" placeholder="ชื่อ/ชื่อเล่น"></div>
+      <div class="fld"><label>ช่องทางรับเงิน</label><select onchange="odSet('payType',this.value);renderOrderForm()">
+        <option value="epay" ${o.payType==='thaiboon'?'':'selected'}>E-payment (ปกติ)</option>
+        <option value="thaiboon" ${o.payType==='thaiboon'?'selected':''}>ไทยช่วยไทย (รัฐ 60% / ลูกค้า 40%)</option>
+      </select></div>
     </div>
+    ${o.payType==='thaiboon'?`<div class="hint" style="margin:-4px 0 8px;color:var(--brand)">🇹🇭 ไทยช่วยไทย: เงินขายเข้า “ถุงเงิน” (รัฐออก 60% · ลูกค้าออก 40% ผ่าน G-Wallet) · LINE MAN หักเฉพาะค่า GP+VAT</div>`:''}
     <div class="sec-title" style="margin:2px 0 6px">เมนูในออเดอร์</div>
     ${items}
     <button class="btn-ghost btn-sm" onclick="odAddItem()" style="margin-bottom:10px">＋ เพิ่มเมนู</button>
@@ -1622,9 +1627,14 @@ function renderOrders(){
   const chEl=document.getElementById('odChart');
   if(chEl){
     if(gross>0||expTotal>0){
-      const inc=donutCard('สรุปแยกตามประเภทรายรับ',
-        [{label:'ยอดขาย E-payment (หลังหักส่วนลด)',v:incomeNet,c:'#56c98c'}],
-        '฿'+fmt(incomeNet),'<span>รายรับ (รวม VAT)</span><span>คิดเป็นเงิน (฿)</span>');
+      const epaySales=list.filter(o=>o.payType!=='thaiboon').reduce((s,o)=>s+orderGross(o)-num(o.discount),0);
+      const tbSales=list.filter(o=>o.payType==='thaiboon').reduce((s,o)=>s+orderGross(o)-num(o.discount),0);
+      const incSegs=[
+        {label:'ยอดขาย E-payment',v:epaySales,c:'#56c98c'},
+        {label:'รับเงินผ่านไทยช่วยไทย (รัฐ 60%)',v:tbSales*0.6,c:'#3d3a5e'},
+        {label:'รับเงินผ่าน G-Wallet (ลูกค้า 40%)',v:tbSales*0.4,c:'#8a91c9'}
+      ].filter(s=>s.v>0);
+      const inc=donutCard('สรุปแยกตามประเภทรายรับ',incSegs,'฿'+fmt(incomeNet),'<span>รายรับ (รวม VAT)</span><span>คิดเป็นเงิน (฿)</span>');
       const exp=donutCard('สรุปแยกตามประเภทรายจ่าย',
         [{label:'ค่า GP (รวม VAT)',v:gpSum,c:'#f4a09c',neg:1},
          {label:'ค่าโฆษณา',v:adT,c:'#e8543a',neg:1},
@@ -1644,7 +1654,7 @@ function renderOrders(){
       <td style="white-space:nowrap">${esc(o.date)}</td>
       <td style="white-space:nowrap">${esc(o.time)}</td>
       <td>${esc(o.platform)}</td>
-      <td style="white-space:nowrap">${esc(o.code)}</td>
+      <td style="white-space:nowrap">${esc(o.code)}${o.payType==='thaiboon'?' <span title="ไทยช่วยไทย — เข้าถุงเงิน" style="font-size:11px">🇹🇭</span>':''}</td>
       <td>${esc(o.customer)}</td>
       <td style="min-width:160px">${orderItemsLabel(o)}</td>
       <td class="num">${orderQty(o)}</td>
