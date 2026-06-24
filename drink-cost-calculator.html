@@ -1453,14 +1453,14 @@ let orderDraft=null;
 function orderDraftItem(){return {menuId:'',name:'',qty:1,sweet:100,blend:false,price:0};}
 function platByName(nm){return (state.platforms||[]).find(p=>p.name===nm);}
 function newOrderDraft(){
-  const o={platform:(state.platforms[0]&&state.platforms[0].name)||'LINE MAN',date:todayStr(),time:'',code:'',customer:'',items:[orderDraftItem()],discount:0,gp:'',ad:'',ship:''};
+  const o={platform:(state.platforms[0]&&state.platforms[0].name)||'LINE MAN',date:todayStr(),time:'',code:'',customer:'',items:[orderDraftItem()],discount:0,gp:'',ad:'',ship:'',feeMode:'pct',gpB:'',adB:'',shipB:''};
   const p=platByName(o.platform);if(p){o.gp=p.gp;o.ad=adEff(p);o.ship=p.ship;}
   return o;
 }
 function odSuggPrice(m,blend){const p=platByName(orderDraft.platform);let pr=p?appPrice(m,p.id):0;if(!(pr>0))pr=num(m.price);if(blend)pr+=blendUp(m);return round2(pr);}
 // ---- order math ----
 function orderGross(o){return (o.items||[]).reduce((s,it)=>s+num(it.price)*num(it.qty),0);}
-function orderFees(o){return orderGross(o)*(num(o.gp)+num(o.ad)+num(o.ship))/100;}
+function orderFees(o){if(o.feeMode==='baht')return num(o.gpB)+num(o.adB)+num(o.shipB);return orderGross(o)*(num(o.gp)+num(o.ad)+num(o.ship))/100;}
 function orderRevenueNet(o){return orderGross(o)-orderFees(o)-num(o.discount);}
 function orderItemCogs(it){if(it.menuId){const m=state.menus.find(x=>x.id===it.menuId);if(m)return (it.blend?fullCostBlend(m):fullCost(m))*num(it.qty);}return 0;}
 function orderCogs(o){return (o.items||[]).reduce((s,it)=>s+orderItemCogs(it),0);}
@@ -1479,6 +1479,7 @@ function openOrders(){
 function closeOrders(){document.getElementById('ordersOverlay').classList.remove('open');}
 // ---- draft setters ----
 function odSet(field,val){orderDraft[field]=val;updateOdPreview();}
+function odSetFeeMode(val){orderDraft.feeMode=val;if(val==='baht'){const g=orderGross(orderDraft);['gp','ad','ship'].forEach(k=>{const bk=k+'B';if(orderDraft[bk]===''||orderDraft[bk]==null)orderDraft[bk]=round2(g*num(orderDraft[k])/100);});}renderOrderForm();}
 function odSetItem(i,field,val){orderDraft.items[i][field]=val;updateOdPreview();}
 function odPlatChange(val){orderDraft.platform=val;const p=platByName(val);if(p){orderDraft.gp=p.gp;orderDraft.ad=adEff(p);orderDraft.ship=p.ship;}renderOrderForm();}
 function odMenuChange(i,val){const it=orderDraft.items[i];it.menuId=val;if(val){const m=state.menus.find(x=>x.id===val);if(m){it.name=m.name;it.price=odSuggPrice(m,it.blend);}}renderOrderForm();}
@@ -1525,11 +1526,19 @@ function renderOrderForm(){
     <div class="sec-title" style="margin:2px 0 6px">เมนูในออเดอร์</div>
     ${items}
     <button class="btn-ghost btn-sm" onclick="odAddItem()" style="margin-bottom:10px">＋ เพิ่มเมนู</button>
+    <div class="fld" style="max-width:320px;margin-bottom:8px"><label>คิดค่าธรรมเนียม</label><select onchange="odSetFeeMode(this.value)">
+      <option value="pct" ${o.feeMode==='baht'?'':'selected'}>% คร่าวๆ (อัตโนมัติจากค่าเฉลี่ย)</option>
+      <option value="baht" ${o.feeMode==='baht'?'selected':''}>฿ ใส่ยอดจริงจากใบเสร็จ (ต่อออเดอร์)</option>
+    </select></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:10px">
       <div class="fld"><label>ส่วนลดร้านออก ฿</label><input type="number" min="0" step="any" value="${o.discount}" oninput="odSet('discount',this.value)"></div>
-      <div class="fld"><label>GP %</label><input type="number" min="0" step="any" value="${o.gp}" oninput="odSet('gp',this.value)"></div>
-      <div class="fld"><label>โฆษณา %</label><input type="number" min="0" step="any" value="${o.ad}" oninput="odSet('ad',this.value)"></div>
-      <div class="fld"><label>ค่าส่ง %</label><input type="number" min="0" step="any" value="${o.ship}" oninput="odSet('ship',this.value)"></div>
+      ${o.feeMode==='baht'
+        ? `<div class="fld"><label>GP จริง ฿</label><input type="number" min="0" step="any" value="${o.gpB}" placeholder="เช่น 21.83" oninput="odSet('gpB',this.value)"></div>
+           <div class="fld"><label>โฆษณา จริง ฿</label><input type="number" min="0" step="any" value="${o.adB}" placeholder="เช่น 21.40" oninput="odSet('adB',this.value)"></div>
+           <div class="fld"><label>ค่าส่ง จริง ฿</label><input type="number" min="0" step="any" value="${o.shipB}" placeholder="0" oninput="odSet('shipB',this.value)"></div>`
+        : `<div class="fld"><label>GP %</label><input type="number" min="0" step="any" value="${o.gp}" oninput="odSet('gp',this.value)"></div>
+           <div class="fld"><label>โฆษณา %</label><input type="number" min="0" step="any" value="${o.ad}" oninput="odSet('ad',this.value)"></div>
+           <div class="fld"><label>ค่าส่ง %</label><input type="number" min="0" step="any" value="${o.ship}" oninput="odSet('ship',this.value)"></div>`}
     </div>
     <div id="odPreview" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
     <div style="display:flex;gap:10px;align-items:center"><button class="btn-primary btn-sm" onclick="saveOrder()">＋ บันทึกออเดอร์</button><span id="odSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
