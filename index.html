@@ -1453,14 +1453,14 @@ let orderDraft=null;
 function orderDraftItem(){return {menuId:'',name:'',qty:1,sweet:100,blend:false,price:0};}
 function platByName(nm){return (state.platforms||[]).find(p=>p.name===nm);}
 function newOrderDraft(){
-  const o={platform:(state.platforms[0]&&state.platforms[0].name)||'LINE MAN',date:todayStr(),time:'',code:'',customer:'',items:[orderDraftItem()],discount:0,gp:'',ad:'',ship:'',feeMode:'pct',gpB:'',adB:'',shipB:''};
+  const o={platform:(state.platforms[0]&&state.platforms[0].name)||'LINE MAN',date:todayStr(),time:'',code:'',customer:'',items:[orderDraftItem()],discount:0,gp:'',ad:'',ship:'',feeMode:'pct',gpB:'',gpvatB:'',adB:'',shipB:''};
   const p=platByName(o.platform);if(p){o.gp=p.gp;o.ad=adEff(p);o.ship=p.ship;}
   return o;
 }
 function odSuggPrice(m,blend){const p=platByName(orderDraft.platform);let pr=p?appPrice(m,p.id):0;if(!(pr>0))pr=num(m.price);if(blend)pr+=blendUp(m);return round2(pr);}
 // ---- order math ----
 function orderGross(o){return (o.items||[]).reduce((s,it)=>s+num(it.price)*num(it.qty),0);}
-function orderFees(o){if(o.feeMode==='baht')return num(o.gpB)+num(o.adB)+num(o.shipB);return orderGross(o)*(num(o.gp)+num(o.ad)+num(o.ship))/100;}
+function orderFees(o){if(o.feeMode==='baht')return num(o.gpB)+num(o.gpvatB)+num(o.adB)+num(o.shipB);return orderGross(o)*(num(o.gp)+num(o.ad)+num(o.ship))/100;}
 function orderRevenueNet(o){return orderGross(o)-orderFees(o)-num(o.discount);}
 function orderItemCogs(it){if(it.menuId){const m=state.menus.find(x=>x.id===it.menuId);if(m)return (it.blend?fullCostBlend(m):fullCost(m))*num(it.qty);}return 0;}
 function orderCogs(o){return (o.items||[]).reduce((s,it)=>s+orderItemCogs(it),0);}
@@ -1533,9 +1533,10 @@ function renderOrderForm(){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:10px">
       <div class="fld"><label>ส่วนลดร้านออก ฿</label><input type="number" min="0" step="any" value="${o.discount}" oninput="odSet('discount',this.value)"></div>
       ${o.feeMode==='baht'
-        ? `<div class="fld"><label>GP จริง ฿</label><input type="number" min="0" step="any" value="${o.gpB}" placeholder="เช่น 21.83" oninput="odSet('gpB',this.value)"></div>
-           <div class="fld"><label>โฆษณา จริง ฿</label><input type="number" min="0" step="any" value="${o.adB}" placeholder="เช่น 21.40" oninput="odSet('adB',this.value)"></div>
-           <div class="fld"><label>ค่าส่ง จริง ฿</label><input type="number" min="0" step="any" value="${o.shipB}" placeholder="0" oninput="odSet('shipB',this.value)"></div>`
+        ? `<div class="fld"><label>ค่าบริการ GP ฿</label><input type="number" min="0" step="any" value="${o.gpB}" placeholder="เช่น 32.40" oninput="odSet('gpB',this.value)"></div>
+           <div class="fld"><label>VAT ค่าบริการ GP ฿</label><input type="number" min="0" step="any" value="${o.gpvatB}" placeholder="เช่น 2.27" oninput="odSet('gpvatB',this.value)"></div>
+           <div class="fld"><label>ค่าบริการโฆษณา ฿</label><input type="number" min="0" step="any" value="${o.adB}" placeholder="เช่น 25.77" oninput="odSet('adB',this.value)"></div>
+           <div class="fld"><label>ค่าส่วนลดค่าส่ง ฿</label><input type="number" min="0" step="any" value="${o.shipB}" placeholder="เช่น 16.00" oninput="odSet('shipB',this.value)"></div>`
         : `<div class="fld"><label>GP %</label><input type="number" min="0" step="any" value="${o.gp}" oninput="odSet('gp',this.value)"></div>
            <div class="fld"><label>โฆษณา %</label><input type="number" min="0" step="any" value="${o.ad}" oninput="odSet('ad',this.value)"></div>
            <div class="fld"><label>ค่าส่ง %</label><input type="number" min="0" step="any" value="${o.ship}" oninput="odSet('ship',this.value)"></div>`}
