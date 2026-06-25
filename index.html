@@ -170,7 +170,7 @@
     <button class="btn-ghost" onclick="openLedger()">📒 บัญชีรับ-จ่าย</button>
     <button class="btn-ghost" onclick="openOrders()">🧾 บันทึกออเดอร์ LM/Grab</button>
     <button class="btn-ghost" onclick="openCatering()">🍱 จ๊อบเบรค/จัดเลี้ยง</button>
-    <button class="btn-ghost" onclick="openCourt()">🏸 สนามแบต</button>
+    <button class="btn-ghost" onclick="openCourt()">🏪 ขายหน้าร้าน/สนามแบต</button>
     <button class="btn-ghost" onclick="openSweetTable()">📊 ตารางเทียบความหวาน</button>
     <button class="btn-ghost" onclick="openReserve()">🪙 เงินสำรอง/กระเป๋า</button>
     <button class="btn-ghost" onclick="exportCSV()">⬇ ส่งออก CSV</button>
@@ -309,11 +309,11 @@
 <!-- Court (สนามแบต) sales modal -->
 <div class="overlay" id="courtOverlay">
   <div class="modal" style="max-width:900px">
-    <div class="modal-head"><h2>🏸 ส่งขายสนามแบต</h2><button class="btn-ghost btn-sm" onclick="closeCourt()">✕ ปิด</button></div>
+    <div class="modal-head"><h2>🏪 บันทึกการขาย (หน้าร้าน / สนามแบต)</h2><button class="btn-ghost btn-sm" onclick="closeCourt()">✕ ปิด</button></div>
     <div class="modal-body">
-      <p class="hint" style="margin-top:0">บันทึกการส่งคุกกี้/บราวนี่ไปขายที่สนามแบตรายสัปดาห์ — เลือกเมนู+จำนวน+ราคา ระบบคิดยอดขาย/ต้นทุน/กำไร · กด “ลงรายรับในบัญชี” (ช่องทาง “สนามแบต”) ได้</p>
+      <p class="hint" style="margin-top:0">บันทึกการขายหน้าร้าน หรือส่งขายสนามแบต — เลือกช่องทาง+วันที่+เมนู+จำนวน+ราคา ระบบคิดยอดขาย/ต้นทุน/กำไร · กด “ลงรายรับในบัญชี” จะเข้า 📒 บัญชีรับ-จ่าย ตามช่องทางที่เลือก</p>
       <div id="ctForm" style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft);margin-bottom:14px"></div>
-      <div class="controls" style="margin:12px 0"><span class="lbl">เดือน</span><input id="ctFilterMonth" type="month" onchange="renderCourtList()"><button class="btn-ghost btn-sm" onclick="document.getElementById('ctFilterMonth').value='';renderCourtList();">ดูทั้งหมด</button></div>
+      <div class="controls" style="margin:12px 0"><span class="lbl">เดือน</span><input id="ctFilterMonth" type="month" onchange="renderCourtList()"><button class="btn-ghost btn-sm" onclick="document.getElementById('ctFilterMonth').value='';renderCourtList();">ดูทั้งหมด</button><span class="lbl">ช่องทาง</span><select id="ctFilterCh" onchange="renderCourtList()"><option value="">ทุกช่องทาง</option><option value="หน้าร้าน">หน้าร้าน</option><option value="สนามแบต">สนามแบต</option></select></div>
       <div id="ctSummary"></div>
       <div class="sec-title" style="margin:10px 0 6px">📋 รายการส่งสนามแบต</div>
       <div id="ctTable"></div>
@@ -479,6 +479,7 @@ function normMenu(m){
   m.id=m.id||uid(); m.type=m.type||'drink'; m.name=m.name||''; m.image=m.image||''; m.margin=m.margin??60; m.price=m.price||0; m.sweetRef=+m.sweetRef||100;
   m.blend=m.blend||{on:false,up:10,extra:0};
   m.appPrices=m.appPrices||{};
+  m.batchYield=m.batchYield||'';
   m.packaging=(m.packaging&&m.packaging.length)?m.packaging:[pack('แก้ว'),pack('ฝา'),pack('หลอด'),pack('ถุงพลาสติก')];
   m.packaging.forEach(p=>{if(p.buseQty==null)p.buseQty=num(p.useQty);if(p.catId==null)p.catId='';});
   m.addons=m.addons||[];m.addons.forEach(a=>{a.extraCost=a.extraCost||0;a.up=a.up||0;
@@ -564,7 +565,9 @@ function addonItemPerPiece(it){if(it.catId){const c=getCat(it.catId);return c?ca
 function addonItemCost(it){return addonItemPerPiece(it)*num(it.qty);}
 function addonCost(a){return (a.items||[]).reduce((s,it)=>s+addonItemCost(it),0)+num(a.extraCost);}
 function sepWaterCost(m){const a=(m.addons||[]).find(x=>(x.name||'').includes('แยกน้ำ'));return a?addonCost(a):0;}
-function totalAt(m,lv,bl){return componentsAt(m,lv,bl)+packagingCost(m,bl);}
+function batchDiv(m){const y=num(m.batchYield);return y>1?y:1;}
+function batchPPText(m){const lv=m.sweetRef||100;const bc=componentsAt(m,lv,false);const d=batchDiv(m);return d>1?'วัตถุดิบ ฿'+fmt(bc)+'/สูตร ÷ '+d+' = ฿'+fmt(bc/d)+'/ชิ้น':'';}
+function totalAt(m,lv,bl){return componentsAt(m,lv,bl)/batchDiv(m)+packagingCost(m,bl);}
 function refCost(m){return totalAt(m,m.sweetRef||100,false);}      // วัตถุดิบ+บรรจุภัณฑ์ สูตรปกติ ที่ความหวานอ้างอิง
 function refCostBlend(m){return totalAt(m,m.sweetRef||100,true);}  // สูตรปั่น
 function overheadTotal(){return (state.overhead||[]).reduce((s,o)=>s+num(o.amount),0);}
@@ -1368,6 +1371,7 @@ function cardHTML(m){
           <option value="__new__">＋ สร้างกลุ่มใหม่…</option>
         </select>
       </div>
+      ${dessert?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px">🍰 1 สูตร/ถาดนี้ทำได้ <input type="number" min="1" step="1" value="${m.batchYield||''}" placeholder="1" oninput="upd('${m.id}','batchYield',this.value)" style="width:60px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:4px;font-family:inherit"> ชิ้น <span style="color:var(--muted)">(ใส่วัตถุดิบทั้งสูตร ระบบหารต่อชิ้นให้)</span> <span id="batchpp-${m.id}" style="margin-left:auto;font-weight:600;color:var(--brand)">${batchPPText(m)}</span></div>`:''}
 
       <div class="sec-title">📦 บรรจุภัณฑ์</div>
       <div>${(m.packaging||[]).map(i=>packCardHTML(m,i)).join('')}</div>
@@ -1430,6 +1434,7 @@ function refreshCard(id){
   (m.addons||[]).forEach(a=>{const e=el.querySelector('#addon-'+a.id);if(e)e.innerHTML=addonSummaryHTML(m,a);(a.items||[]).forEach(it=>setTxt('#aitem-'+it.id,'฿'+fmt(addonItemCost(it))));});
   SWEET.forEach(l=>{setTxt('#sw-'+id+'-'+l,'฿'+fmt(totalAt(m,l,false)));setTxt('#swb-'+id+'-'+l,'฿'+fmt(totalAt(m,l,true)));});
   setTxt('#matcost-'+id,'฿'+fmt(refCost(m)));
+  const bpp=el.querySelector('#batchpp-'+id);if(bpp)bpp.innerHTML=batchPPText(m);
   setTxt('#ohcost-'+id,'฿'+fmt(overheadTotal()));
   setTxt('#cost-'+id,'฿'+fmt(fullCost(m)));
   setTxt('#sugg-'+id,'฿'+fmt(suggDine(m)));
@@ -1892,7 +1897,7 @@ function renderCateringList(){
 // ---------- court / สนามแบต sales ----------
 let ctDraft=null;
 function ctNewItem(){return {menuId:'',name:'',qty:1,price:0};}
-function ctNewDraft(){return {id:'',date:todayStr(),note:'',items:[ctNewItem()]};}
+function ctNewDraft(){return {id:'',date:todayStr(),channel:'หน้าร้าน',note:'',items:[ctNewItem()]};}
 function ctRevenue(c){return (c.items||[]).reduce((s,it)=>s+num(it.price)*num(it.qty),0);}
 function ctItemCogs(it){if(it.menuId){const m=state.menus.find(x=>x.id===it.menuId);if(m)return fullCost(m)*num(it.qty);}return 0;}
 function ctCogs(c){return (c.items||[]).reduce((s,it)=>s+ctItemCogs(it),0);}
@@ -1910,7 +1915,7 @@ function saveCourt(){const c=JSON.parse(JSON.stringify(ctDraft));c.items=(c.item
 function editCourt(id){const c=state.courtLogs.find(x=>x.id===id);if(!c)return;ctDraft=JSON.parse(JSON.stringify(c));renderCourtForm();renderCourtList();const f=document.getElementById('ctForm');if(f)f.scrollIntoView({behavior:'smooth',block:'start'});}
 function cancelCourt(){ctDraft=ctNewDraft();renderCourtForm();}
 function delCourt(id){if(confirm('ลบรายการนี้?')){state.courtLogs=state.courtLogs.filter(x=>x.id!==id);save();renderCourtList();}}
-function ctToLedger(){const c=ctDraft;const rev=ctRevenue(c);if(!(rev>0)){alert('ยังไม่มียอดขาย');return;}if(!confirm('บันทึกรายรับ ฿'+fmt(rev)+' (สนามแบต) เข้าบัญชีรายรับ-รายจ่าย?'))return;state.ledger=state.ledger||[];state.ledger.push({id:uid(),date:c.date||todayStr(),kind:'in',source:'สนามแบต',channel:'สนามแบต',note:'สนามแบต'+(c.note?' '+c.note:''),amount:round2(rev)});save();alert('บันทึกรายรับแล้ว ✓ (ดูที่ 📒 บัญชีรับ-จ่าย)');}
+function ctToLedger(){const c=ctDraft;const rev=ctRevenue(c);if(!(rev>0)){alert('ยังไม่มียอดขาย');return;}const ch=c.channel||'หน้าร้าน';if(!confirm('บันทึกรายรับ ฿'+fmt(rev)+' ('+ch+') เข้าบัญชีรายรับ-รายจ่าย?'))return;state.ledger=state.ledger||[];state.ledger.push({id:uid(),date:c.date||todayStr(),kind:'in',source:ch,channel:ch,note:ch+(c.note?' '+c.note:''),amount:round2(rev)});save();alert('บันทึกรายรับแล้ว ✓ (ดูที่ 📒 บัญชีรับ-จ่าย)');}
 function ctUpdatePreview(){const el=document.getElementById('ctPreview');if(!el)return;const c=ctDraft;el.innerHTML=`ยอดขาย <b>฿${fmt(ctRevenue(c))}</b> · ต้นทุน ฿${fmt(ctCogs(c))} · กำไร <b style="color:${ctProfit(c)>=0?'var(--accent)':'var(--danger)'}">฿${fmt(ctProfit(c))}</b>`;(c.items||[]).forEach((it,i)=>{const e=document.getElementById('ctline-'+i);if(e)e.textContent='฿'+fmt(num(it.price)*num(it.qty));});}
 function renderCourtForm(){
   const c=ctDraft;const editing=c.id&&(state.courtLogs||[]).some(x=>x.id===c.id);
@@ -1925,7 +1930,8 @@ function renderCourtForm(){
   document.getElementById('ctForm').innerHTML=`
     ${editing?`<div style="background:#fff4e6;border:1px solid #f0c98a;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:13px;font-weight:600;color:var(--brand)">✎ กำลังแก้ไขรายการ ${esc(c.date||'')}</div>`:''}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px">
-      <div class="fld"><label>วันที่ส่ง</label><input type="date" value="${esc(c.date)}" onchange="ctSet('date',this.value)"></div>
+      <div class="fld" style="min-width:0"><label>ช่องทาง</label><select onchange="ctSet('channel',this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px"><option value="หน้าร้าน" ${(c.channel||'หน้าร้าน')==='หน้าร้าน'?'selected':''}>🏪 หน้าร้าน</option><option value="สนามแบต" ${c.channel==='สนามแบต'?'selected':''}>🏸 สนามแบต</option></select></div>
+      <div class="fld"><label>วันที่</label><input type="date" value="${esc(c.date)}" onchange="ctSet('date',this.value)"></div>
       <div class="fld"><label>โน้ต</label><input value="${esc(c.note||'')}" oninput="ctSet('note',this.value)" placeholder="เช่น สัปดาห์ที่ 1"></div>
     </div>
     <div class="sec-title" style="margin:2px 0 6px">เมนูที่ส่ง</div>
@@ -1935,7 +1941,7 @@ function renderCourtForm(){
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn-primary btn-sm" onclick="saveCourt()">${editing?'💾 บันทึกการแก้ไข':'＋ บันทึก'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelCourt()">ยกเลิก</button>`:''}<button class="btn-ghost btn-sm" onclick="ctToLedger()">➕ ลงรายรับในบัญชี</button><span id="ctSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
   ctUpdatePreview();
 }
-function ctFiltered(){const fm=document.getElementById('ctFilterMonth').value;return (state.courtLogs||[]).filter(c=>!fm||(c.date||'').slice(0,7)===fm);}
+function ctFiltered(){const fm=document.getElementById('ctFilterMonth').value;const fc=(document.getElementById('ctFilterCh')||{}).value||'';return (state.courtLogs||[]).filter(c=>(!fm||(c.date||'').slice(0,7)===fm)&&(!fc||(c.channel||'สนามแบต')===fc));}
 function renderCourtList(){
   const list=ctFiltered().slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const sum=f=>list.reduce((s,c)=>s+f(c),0);
@@ -1945,8 +1951,8 @@ function renderCourtList(){
     <div class="stat"><div class="label">ต้นทุนรวม</div><div class="value brown">฿${fmt(sum(ctCogs))}</div></div>
     <div class="stat"><div class="label">กำไรรวม</div><div class="value ${sum(ctProfit)>=0?'green':''}" style="${sum(ctProfit)<0?'color:var(--danger)':''}">฿${fmt(sum(ctProfit))}</div></div>
   </div>`;
-  document.getElementById('ctTable').innerHTML=list.length?`<table class="pk-table"><thead><tr><th>วันที่</th><th>โน้ต</th><th>เมนู</th><th class="num">ชิ้น</th><th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">กำไร</th><th></th></tr></thead><tbody>${list.map(c=>{const pf=ctProfit(c);return `<tr>
-    <td style="white-space:nowrap">${esc(c.date)}</td><td>${esc(c.note||'')}</td>
+  document.getElementById('ctTable').innerHTML=list.length?`<table class="pk-table"><thead><tr><th>วันที่</th><th>ช่องทาง</th><th>โน้ต</th><th>เมนู</th><th class="num">ชิ้น</th><th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">กำไร</th><th></th></tr></thead><tbody>${list.map(c=>{const pf=ctProfit(c);return `<tr>
+    <td style="white-space:nowrap">${esc(c.date)}</td><td style="white-space:nowrap">${esc(c.channel||'สนามแบต')}</td><td>${esc(c.note||'')}</td>
     <td style="min-width:160px">${(c.items||[]).map(it=>esc(it.name||'(เมนู)')+(num(it.qty)>1?' ×'+num(it.qty):'')).join(', ')}</td>
     <td class="num">${ctQty(c)}</td><td class="num">฿${fmt(ctRevenue(c))}</td><td class="num">฿${fmt(ctCogs(c))}</td>
     <td class="num" style="font-weight:700;color:${pf>=0?'var(--accent)':'var(--danger)'}">฿${fmt(pf)}</td>
