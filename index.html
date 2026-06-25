@@ -570,21 +570,21 @@ function batchDiv(m){const y=num(m.batchYield);return y>1?y:1;}
 function batchPPText(m){const lv=m.sweetRef||100;const bc=componentsAt(m,lv,false);const d=batchDiv(m);return d>1?'วัตถุดิบ ฿'+fmt(bc)+'/สูตร ÷ '+d+' = ฿'+fmt(bc/d)+'/ชิ้น':'';}
 function updCP(mid,field,val){const m=state.menus.find(x=>x.id===mid);m.cp=m.cp||{};m.cp[field]=val;save();refreshCard(mid);}
 function costBreakdownHTML(m){
-  const cp=m.cp||{},id=m.id,price=num(m.price),goods=refCost(m);
+  const cp=m.cp||{},id=m.id,price=num(m.price),goods=refCost(m),N=batchDiv(m);
   const matMax=num(cp.matMax),labor=num(cp.labor),util=num(cp.util),fuel=num(cp.fuel);
   const matPct=price>0?goods/price*100:0,laborAmt=goods*labor/100,utilAmt=goods*util/100,fuelAmt=goods*fuel/100;
   const remain=price-goods-laborAmt-utilAmt-fuelAmt,remainPct=price>0?remain/price*100:0,over=price>0&&matPct>matMax+0.001;
   const pctInp=(f,v)=>`<input type="number" min="0" step="any" value="${v}" oninput="updCP('${id}','${f}',this.value)" style="width:52px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:3px 5px;font-family:inherit">`;
   return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;margin-top:8px">
-    <div style="font-weight:700;font-size:13px;margin-bottom:6px">📊 สัดส่วนต้นทุน (อิงราคาขาย ฿<span id="cbd-price-${id}">${fmt(price)}</span>/ชิ้น)</div>
-    <table class="pk-table"><thead><tr><th>หมวด</th><th class="num">%</th><th class="num">เป็นเงิน ฿</th><th></th></tr></thead><tbody>
-      <tr><td>ค่าของจริง (วัตถุดิบ+บรรจุ)</td><td class="num" id="cbd-matpct-${id}" style="color:${over?'var(--danger)':'var(--accent)'}">${fmt(matPct)}%</td><td class="num" id="cbd-goods-${id}">฿${fmt(goods)}</td><td>เพดาน ${pctInp('matMax',matMax)}% <span id="cbd-matflag-${id}">${over?'⚠ เกิน!':'✓'}</span></td></tr>
-      <tr><td>ค่าแรง</td><td class="num">${pctInp('labor',labor)}%</td><td class="num" id="cbd-labor-${id}">฿${fmt(laborAmt)}</td><td></td></tr>
-      <tr><td>ค่าน้ำไฟ</td><td class="num">${pctInp('util',util)}%</td><td class="num" id="cbd-util-${id}">฿${fmt(utilAmt)}</td><td></td></tr>
-      <tr><td>ค่าน้ำมัน</td><td class="num">${pctInp('fuel',fuel)}%</td><td class="num" id="cbd-fuel-${id}">฿${fmt(fuelAmt)}</td><td></td></tr>
-      <tr style="border-top:2px solid var(--line)"><td style="font-weight:700">เหลือ (กำไร/อื่นๆ)</td><td class="num" id="cbd-remainpct-${id}" style="font-weight:700">${fmt(remainPct)}%</td><td class="num" id="cbd-remain-${id}" style="font-weight:700;color:${remain>=0?'var(--accent)':'var(--danger)'}">฿${fmt(remain)}</td><td></td></tr>
+    <div style="font-weight:700;font-size:13px;margin-bottom:6px">📊 สัดส่วนต้นทุน (ราคาขาย ฿<span id="cbd-price-${id}">${fmt(price)}</span>/ชิ้น · 1 สูตร = <span id="cbd-N-${id}">${N}</span> ชิ้น)</div>
+    <table class="pk-table"><thead><tr><th>หมวด</th><th class="num">%</th><th class="num">฿/ชิ้น</th><th class="num">ทั้งสูตร</th><th></th></tr></thead><tbody>
+      <tr><td>ค่าของจริง (วัตถุดิบ+บรรจุ)</td><td class="num" id="cbd-matpct-${id}" style="color:${over?'var(--danger)':'var(--accent)'}">${fmt(matPct)}%</td><td class="num" id="cbd-goods-${id}">฿${fmt(goods)}</td><td class="num" id="cbd-goodsb-${id}">฿${fmt(goods*N)}</td><td>เพดาน ${pctInp('matMax',matMax)}% <span id="cbd-matflag-${id}">${over?'⚠ เกิน!':'✓'}</span></td></tr>
+      <tr><td>ค่าแรง</td><td class="num">${pctInp('labor',labor)}%</td><td class="num" id="cbd-labor-${id}">฿${fmt(laborAmt)}</td><td class="num" id="cbd-laborb-${id}">฿${fmt(laborAmt*N)}</td><td></td></tr>
+      <tr><td>ค่าน้ำไฟ</td><td class="num">${pctInp('util',util)}%</td><td class="num" id="cbd-util-${id}">฿${fmt(utilAmt)}</td><td class="num" id="cbd-utilb-${id}">฿${fmt(utilAmt*N)}</td><td></td></tr>
+      <tr><td>ค่าน้ำมัน</td><td class="num">${pctInp('fuel',fuel)}%</td><td class="num" id="cbd-fuel-${id}">฿${fmt(fuelAmt)}</td><td class="num" id="cbd-fuelb-${id}">฿${fmt(fuelAmt*N)}</td><td></td></tr>
+      <tr style="border-top:2px solid var(--line)"><td style="font-weight:700">เหลือ (กำไร/อื่นๆ)</td><td class="num" id="cbd-remainpct-${id}" style="font-weight:700">${fmt(remainPct)}%</td><td class="num" id="cbd-remain-${id}" style="font-weight:700;color:${remain>=0?'var(--accent)':'var(--danger)'}">฿${fmt(remain)}</td><td class="num" id="cbd-remainb-${id}" style="font-weight:700;color:${remain>=0?'var(--accent)':'var(--danger)'}">฿${fmt(remain*N)}</td><td></td></tr>
     </tbody></table>
-    <p class="hint" style="margin-top:6px">ค่าของจริง = % ของราคาขาย (ควร ≤ เพดาน 35% ถ้าเกินขึ้น ⚠) · ค่าแรง/น้ำไฟ/น้ำมัน คิดเป็น % ของ “ค่าของ (วัตถุดิบ+บรรจุ)” · ที่เหลือ = ราคาขาย − ค่าของ − ค่าแรง − น้ำไฟ − น้ำมัน = กำไร</p>
+    <p class="hint" style="margin-top:6px">ค่าของจริง = % ของราคาขาย (ควร ≤ เพดาน 35% ถ้าเกินขึ้น ⚠) · ค่าแรง/น้ำไฟ/น้ำมัน = % ของ “ค่าของ” · ที่เหลือ = กำไร · คอลัมน์ “ทั้งสูตร” = ต่อชิ้น × ${N} ชิ้น</p>
   </div>`;
 }
 function totalAt(m,lv,bl){return componentsAt(m,lv,bl)/batchDiv(m)+packagingCost(m,bl);}
@@ -1456,8 +1456,8 @@ function refreshCard(id){
   SWEET.forEach(l=>{setTxt('#sw-'+id+'-'+l,'฿'+fmt(totalAt(m,l,false)));setTxt('#swb-'+id+'-'+l,'฿'+fmt(totalAt(m,l,true)));});
   setTxt('#matcost-'+id,'฿'+fmt(refCost(m)));
   const bpp=el.querySelector('#batchpp-'+id);if(bpp)bpp.innerHTML=batchPPText(m);
-  if(m.type==='dessert'){const cp=m.cp||{},price=num(m.price),goods=refCost(m);const matMax=num(cp.matMax),labor=num(cp.labor),util=num(cp.util),fuel=num(cp.fuel);const matPct=price>0?goods/price*100:0,laborAmt=goods*labor/100,utilAmt=goods*util/100,fuelAmt=goods*fuel/100;const remain=price-goods-laborAmt-utilAmt-fuelAmt,remainPct=price>0?remain/price*100:0,over=price>0&&matPct>matMax+0.001;
-    setTxt('#cbd-price-'+id,fmt(price));setTxt('#cbd-goods-'+id,'฿'+fmt(goods));const mp=el.querySelector('#cbd-matpct-'+id);if(mp){mp.textContent=fmt(matPct)+'%';mp.style.color=over?'var(--danger)':'var(--accent)';}setTxt('#cbd-matflag-'+id,over?'⚠ เกิน!':'✓');setTxt('#cbd-labor-'+id,'฿'+fmt(laborAmt));setTxt('#cbd-util-'+id,'฿'+fmt(utilAmt));setTxt('#cbd-fuel-'+id,'฿'+fmt(fuelAmt));setTxt('#cbd-remainpct-'+id,fmt(remainPct)+'%');const rm=el.querySelector('#cbd-remain-'+id);if(rm){rm.textContent='฿'+fmt(remain);rm.style.color=remain>=0?'var(--accent)':'var(--danger)';}}
+  if(m.type==='dessert'){const cp=m.cp||{},price=num(m.price),goods=refCost(m),N=batchDiv(m);const matMax=num(cp.matMax),labor=num(cp.labor),util=num(cp.util),fuel=num(cp.fuel);const matPct=price>0?goods/price*100:0,laborAmt=goods*labor/100,utilAmt=goods*util/100,fuelAmt=goods*fuel/100;const remain=price-goods-laborAmt-utilAmt-fuelAmt,remainPct=price>0?remain/price*100:0,over=price>0&&matPct>matMax+0.001;
+    setTxt('#cbd-price-'+id,fmt(price));setTxt('#cbd-N-'+id,String(N));setTxt('#cbd-goods-'+id,'฿'+fmt(goods));setTxt('#cbd-goodsb-'+id,'฿'+fmt(goods*N));const mp=el.querySelector('#cbd-matpct-'+id);if(mp){mp.textContent=fmt(matPct)+'%';mp.style.color=over?'var(--danger)':'var(--accent)';}setTxt('#cbd-matflag-'+id,over?'⚠ เกิน!':'✓');setTxt('#cbd-labor-'+id,'฿'+fmt(laborAmt));setTxt('#cbd-laborb-'+id,'฿'+fmt(laborAmt*N));setTxt('#cbd-util-'+id,'฿'+fmt(utilAmt));setTxt('#cbd-utilb-'+id,'฿'+fmt(utilAmt*N));setTxt('#cbd-fuel-'+id,'฿'+fmt(fuelAmt));setTxt('#cbd-fuelb-'+id,'฿'+fmt(fuelAmt*N));setTxt('#cbd-remainpct-'+id,fmt(remainPct)+'%');const rm=el.querySelector('#cbd-remain-'+id);if(rm){rm.textContent='฿'+fmt(remain);rm.style.color=remain>=0?'var(--accent)':'var(--danger)';}const rmb=el.querySelector('#cbd-remainb-'+id);if(rmb){rmb.textContent='฿'+fmt(remain*N);rmb.style.color=remain>=0?'var(--accent)':'var(--danger)';}}
   setTxt('#ohcost-'+id,'฿'+fmt(overheadTotal()));
   setTxt('#cost-'+id,'฿'+fmt(fullCost(m)));
   setTxt('#sugg-'+id,'฿'+fmt(suggDine(m)));
