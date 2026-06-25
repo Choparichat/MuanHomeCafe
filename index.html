@@ -1724,13 +1724,18 @@ function exportOrdersCSV(){
 // ---------- catering / break jobs (จ๊อบเบรค/จัดเลี้ยง) ----------
 let cjDraft=null;
 function cjNewItem(){return {id:uid(),name:'',unitCost:'',qty:1};}
-function cjNewDraft(){return {id:'',name:'',date:todayStr(),sets:1,margin:40,price:'',extraCost:'',items:[cjNewItem()]};}
+function cjNewDraft(){return {id:'',name:'',date:todayStr(),sets:1,margin:40,price:'',extras:[],items:[cjNewItem()]};}
+function cjNewExtra(){return {id:uid(),name:'',note:'',amount:''};}
+function cjExtraTotal(j){if(j.extras&&j.extras.length)return j.extras.reduce((s,e)=>s+num(e.amount),0);return num(j.extraCost||0);}
+function cjAddExtra(){cjDraft.extras=cjDraft.extras||[];cjDraft.extras.push(cjNewExtra());renderCateringForm();}
+function cjDelExtra(i){cjDraft.extras.splice(i,1);renderCateringForm();}
+function cjSetExtra(i,field,val){cjDraft.extras[i][field]=val;cjUpdateTotals();}
 function cjAllCat(){const a=[];(state.bases||[]).forEach(b=>a.push({name:'🧪 '+(b.name||'เบส'),unit:basePerUnit(b)}));(state.ingCatalog||[]).forEach(c=>a.push({name:c.name,unit:ingCatPerUnit(c)}));(state.packCatalog||[]).forEach(c=>a.push({name:c.name,unit:catPerPiece(c)}));(state.otherCatalog||[]).forEach(c=>a.push({name:c.name,unit:otherPerUnit(c)}));return a;}
 function cjDataOpts(){return cjAllCat().slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','th',{numeric:true})).map(x=>`<option value="${esc(x.name)}">฿${fmt(x.unit)}/หน่วย</option>`).join('');}
 function cjFindCat(v){v=(v||'').trim().toLowerCase();return cjAllCat().find(x=>(x.name||'').trim().toLowerCase()===v);}
 function cjMatPerSet(j){return (j.items||[]).reduce((s,it)=>s+num(it.unitCost)*num(it.qty),0);}
 function cjCostPerSet(j){return cjMatPerSet(j);}
-function cjTotalCost(j){return cjMatPerSet(j)*num(j.sets)+num(j.extraCost);}
+function cjTotalCost(j){return cjMatPerSet(j)*num(j.sets)+cjExtraTotal(j);}
 function cjCostPerSetAll(j){const n=num(j.sets);return n>0?cjTotalCost(j)/n:cjMatPerSet(j);}
 function cjSugg(j){const c=cjCostPerSetAll(j),m=num(j.margin);return (m>0&&m<100)?c/(1-m/100):c;}
 function cjPricePerSet(j){return num(j.price)>0?num(j.price):cjSugg(j);}
@@ -1761,6 +1766,13 @@ function cjTotalsHTML(j){
 }
 function renderCateringForm(){
   const j=cjDraft;const editing=j.id&&(state.cateringJobs||[]).some(x=>x.id===j.id);const dl='cjdl';
+  if(!j.extras)j.extras=num(j.extraCost)>0?[{id:uid(),name:'ค่าใช้จ่ายอื่น',note:'',amount:num(j.extraCost)}]:[];
+  const extraRows=(j.extras||[]).map((e,i)=>`<div style="display:grid;grid-template-columns:1.3fr 1.3fr auto auto;gap:6px;align-items:end;margin-bottom:6px">
+    <div class="fld" style="min-width:0"><label>รายการ</label><input value="${esc(e.name)}" oninput="cjSetExtra(${i},'name',this.value)" placeholder="เช่น ค่าแรง" style="width:100%;box-sizing:border-box"></div>
+    <div class="fld" style="min-width:0"><label>หมายเหตุ</label><input value="${esc(e.note||'')}" oninput="cjSetExtra(${i},'note',this.value)" placeholder="เช่น 6 ชม.×50" style="width:100%;box-sizing:border-box"></div>
+    <div class="fld"><label>จำนวน ฿</label><input type="number" min="0" step="any" style="width:90px;text-align:right" value="${e.amount}" oninput="cjSetExtra(${i},'amount',this.value)"></div>
+    <button class="btn-danger btn-sm" onclick="cjDelExtra(${i})" title="ลบ">✕</button>
+  </div>`).join('');
   const rows=j.items.map((it,i)=>`<div style="display:grid;grid-template-columns:1.8fr auto auto auto auto;gap:6px;align-items:end;margin-bottom:6px">
     <div class="fld" style="min-width:0"><label>รายการ</label><input list="${dl}" value="${esc(it.name||'')}" placeholder="พิมพ์ค้นหาคลัง / กรอกเอง" onchange="cjPickItem(${i},this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:13px"></div>
     <div class="fld"><label>ราคา/หน่วย ฿</label><input type="number" min="0" step="any" style="width:90px;text-align:right" value="${it.unitCost}" oninput="cjSetItem(${i},'unitCost',this.value)"></div>
@@ -1776,12 +1788,14 @@ function renderCateringForm(){
       <div class="fld"><label>จำนวนชุด</label><input type="number" min="0" step="1" value="${j.sets}" oninput="cjSet('sets',this.value)"></div>
       <div class="fld"><label>กำไรที่ต้องการ %</label><input type="number" min="0" max="99" step="any" value="${j.margin}" oninput="cjSet('margin',this.value)"></div>
       <div class="fld"><label>ราคาขายจริง/ชุด ฿</label><input type="number" min="0" step="any" value="${j.price}" placeholder="${Math.ceil(cjSugg(j))||0}" oninput="cjSet('price',this.value)"></div>
-      <div class="fld"><label title="ค่าแรง/ค่าน้ำมัน/ค่ากาว/ป้ายราคา ฯลฯ รวมทั้งงาน">ค่าใช้จ่ายอื่น (ทั้งงาน) ฿</label><input type="number" min="0" step="any" value="${j.extraCost}" placeholder="เช่น 300" oninput="cjSet('extraCost',this.value)"></div>
     </div>
     <div class="sec-title" style="margin:2px 0 6px">รายการใน 1 ชุดเบรค</div>
     <datalist id="${dl}">${cjDataOpts()}</datalist>
     ${rows}
     <button class="btn-ghost btn-sm" onclick="cjAddItem()" style="margin-bottom:10px">＋ เพิ่มรายการ</button>
+    <div class="sec-title" style="margin:8px 0 6px">💼 ค่าใช้จ่ายอื่น (ทั้งงาน — น้ำแข็ง/ถ่าน/ค่ากระดาษ/ค่าแรง/ค่าไฟ/ค่าน้ำมัน ฯลฯ)</div>
+    ${extraRows}
+    <button class="btn-ghost btn-sm" onclick="cjAddExtra()" style="margin-bottom:10px">＋ เพิ่มค่าใช้จ่าย</button>
     <div id="cjTotals" style="margin-bottom:10px">${cjTotalsHTML(j)}</div>
     <div style="display:flex;gap:10px;align-items:center"><button class="btn-primary btn-sm" onclick="saveCateringJob()">${editing?'💾 บันทึกการแก้ไข':'＋ บันทึกจ๊อบ'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelCatering()">ยกเลิก</button>`:''}<span id="cjSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
 }
