@@ -1724,12 +1724,41 @@ function exportOrdersCSV(){
 // ---------- catering / break jobs (จ๊อบเบรค/จัดเลี้ยง) ----------
 let cjDraft=null;
 function cjNewItem(){return {id:uid(),name:'',unitCost:'',qty:1};}
-function cjNewDraft(){return {id:'',name:'',date:todayStr(),sets:1,margin:40,price:'',extras:[],items:[cjNewItem()]};}
+function cjDefaultAllocs(){return [{id:uid(),name:'ควรหักต้นทุน',pct:35},{id:uid(),name:'ค่าแรง',pct:30},{id:uid(),name:'ค่าน้ำ+ค่าไฟ',pct:10},{id:uid(),name:'ค่าน้ำมัน',pct:10},{id:uid(),name:'กำไรคืนเงินเก็บ',pct:7.5},{id:uid(),name:'ค่าแรงจริง',pct:7.5}];}
+function cjNewDraft(){return {id:'',name:'',date:todayStr(),sets:1,margin:40,price:'',extras:[],allocBase:'profit',allocCustom:'',allocs:cjDefaultAllocs(),items:[cjNewItem()]};}
 function cjNewExtra(){return {id:uid(),name:'',note:'',amount:''};}
 function cjExtraTotal(j){if(j.extras&&j.extras.length)return j.extras.reduce((s,e)=>s+num(e.amount),0);return num(j.extraCost||0);}
 function cjAddExtra(){cjDraft.extras=cjDraft.extras||[];cjDraft.extras.push(cjNewExtra());renderCateringForm();}
 function cjDelExtra(i){cjDraft.extras.splice(i,1);renderCateringForm();}
 function cjSetExtra(i,field,val){cjDraft.extras[i][field]=val;cjUpdateTotals();}
+function cjAllocBaseAmt(j){if(j.allocBase==='revenue')return cjPricePerSet(j)*num(j.sets);if(j.allocBase==='custom')return num(j.allocCustom);return cjProfitTotal(j);}
+function cjSetAllocBase(val){cjDraft.allocBase=val;renderCateringForm();}
+function cjSetAlloc(i,field,val){cjDraft.allocs[i][field]=val;cjUpdateTotals();}
+function cjAddAlloc(){cjDraft.allocs=cjDraft.allocs||[];cjDraft.allocs.push({id:uid(),name:'',pct:0});renderCateringForm();}
+function cjDelAlloc(i){cjDraft.allocs.splice(i,1);renderCateringForm();}
+function cjAllocHTML(j){
+  const ba=cjAllocBaseAmt(j);
+  const rows=(j.allocs||[]).map((a,i)=>`<div style="display:grid;grid-template-columns:1.4fr auto auto auto;gap:6px;align-items:end;margin-bottom:6px">
+    <div class="fld" style="min-width:0"><label>หมวด</label><input value="${esc(a.name)}" oninput="cjSetAlloc(${i},'name',this.value)" style="width:100%;box-sizing:border-box"></div>
+    <div class="fld"><label>%</label><input type="number" min="0" step="any" style="width:70px;text-align:right" value="${a.pct}" oninput="cjSetAlloc(${i},'pct',this.value)"></div>
+    <div class="fld"><label>เป็นเงิน</label><span id="cjalloc-amt-${i}" style="font-weight:600;color:var(--brand);padding:6px 0;display:inline-block">฿${fmt(ba*num(a.pct)/100)}</span></div>
+    <button class="btn-danger btn-sm" onclick="cjDelAlloc(${i})" title="ลบ">✕</button>
+  </div>`).join('');
+  const tp=(j.allocs||[]).reduce((s,a)=>s+num(a.pct),0);
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <span class="lbl">ฐานที่ใช้แบ่ง</span>
+      <select onchange="cjSetAllocBase(this.value)" style="border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-family:inherit;font-size:13px">
+        <option value="profit" ${j.allocBase==='profit'?'selected':''}>กำไรรวม</option>
+        <option value="revenue" ${j.allocBase==='revenue'?'selected':''}>รายได้รวม (ราคาขาย×ชุด)</option>
+        <option value="custom" ${j.allocBase==='custom'?'selected':''}>กรอกเอง</option>
+      </select>
+      ${j.allocBase==='custom'?`<input type="number" min="0" step="any" value="${j.allocCustom}" placeholder="จำนวนเงิน" oninput="cjSet('allocCustom',this.value)" style="width:120px;border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-family:inherit">`:''}
+      <span class="hint">ฐาน = <b id="cjalloc-base">฿${fmt(ba)}</b></span>
+    </div>
+    ${rows}
+    <button class="btn-ghost btn-sm" onclick="cjAddAlloc()" style="margin-bottom:6px">＋ เพิ่มหมวด</button>
+    <div class="hint">รวม % = <b id="cjalloc-totpct" style="color:${Math.abs(tp-100)<0.01?'var(--accent)':'var(--danger)'}">${fmt(tp)}%</b> (ควรได้ 100%)</div>`;
+}
 function cjAllCat(){const a=[];(state.bases||[]).forEach(b=>a.push({name:'🧪 '+(b.name||'เบส'),unit:basePerUnit(b)}));(state.ingCatalog||[]).forEach(c=>a.push({name:c.name,unit:ingCatPerUnit(c)}));(state.packCatalog||[]).forEach(c=>a.push({name:c.name,unit:catPerPiece(c)}));(state.otherCatalog||[]).forEach(c=>a.push({name:c.name,unit:otherPerUnit(c)}));return a;}
 function cjDataOpts(){return cjAllCat().slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','th',{numeric:true})).map(x=>`<option value="${esc(x.name)}">฿${fmt(x.unit)}/หน่วย</option>`).join('');}
 function cjFindCat(v){v=(v||'').trim().toLowerCase();return cjAllCat().find(x=>(x.name||'').trim().toLowerCase()===v);}
@@ -1752,7 +1781,10 @@ function saveCateringJob(){const j=JSON.parse(JSON.stringify(cjDraft));j.items=(
 function editCateringJob(id){const j=state.cateringJobs.find(x=>x.id===id);if(!j)return;cjDraft=JSON.parse(JSON.stringify(j));renderCateringForm();renderCateringList();const f=document.getElementById('cjForm');if(f)f.scrollIntoView({behavior:'smooth',block:'start'});}
 function cancelCatering(){cjDraft=cjNewDraft();renderCateringForm();}
 function delCateringJob(id){if(confirm('ลบจ๊อบนี้?')){state.cateringJobs=state.cateringJobs.filter(x=>x.id!==id);save();renderCateringList();}}
-function cjUpdateTotals(){const el=document.getElementById('cjTotals');if(el)el.innerHTML=cjTotalsHTML(cjDraft);(cjDraft.items||[]).forEach((it,i)=>{const e=document.getElementById('cjline-'+i);if(e)e.textContent='฿'+fmt(num(it.unitCost)*num(it.qty));});}
+function cjUpdateTotals(){const el=document.getElementById('cjTotals');if(el)el.innerHTML=cjTotalsHTML(cjDraft);(cjDraft.items||[]).forEach((it,i)=>{const e=document.getElementById('cjline-'+i);if(e)e.textContent='฿'+fmt(num(it.unitCost)*num(it.qty));});
+  const ba=cjAllocBaseAmt(cjDraft);const be=document.getElementById('cjalloc-base');if(be)be.textContent='฿'+fmt(ba);
+  (cjDraft.allocs||[]).forEach((a,i)=>{const e=document.getElementById('cjalloc-amt-'+i);if(e)e.textContent='฿'+fmt(ba*num(a.pct)/100);});
+  const ts=document.getElementById('cjalloc-totpct');if(ts){const tp=(cjDraft.allocs||[]).reduce((s,a)=>s+num(a.pct),0);ts.textContent=fmt(tp)+'%';ts.style.color=Math.abs(tp-100)<0.01?'var(--accent)':'var(--danger)';}}
 function cjTotalsHTML(j){
   const cps=cjCostPerSet(j),cpa=cjCostPerSetAll(j),tot=cjTotalCost(j),sugg=cjSugg(j),pps=cjPricePerSet(j),ppf=cjProfitPerSet(j),ptot=cjProfitTotal(j),mp=pps>0?ppf/pps*100:0;
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
@@ -1767,6 +1799,7 @@ function cjTotalsHTML(j){
 function renderCateringForm(){
   const j=cjDraft;const editing=j.id&&(state.cateringJobs||[]).some(x=>x.id===j.id);const dl='cjdl';
   if(!j.extras)j.extras=num(j.extraCost)>0?[{id:uid(),name:'ค่าใช้จ่ายอื่น',note:'',amount:num(j.extraCost)}]:[];
+  if(!j.allocs)j.allocs=cjDefaultAllocs();if(!j.allocBase)j.allocBase='profit';
   const extraRows=(j.extras||[]).map((e,i)=>`<div style="display:grid;grid-template-columns:1.3fr 1.3fr auto auto;gap:6px;align-items:end;margin-bottom:6px">
     <div class="fld" style="min-width:0"><label>รายการ</label><input value="${esc(e.name)}" oninput="cjSetExtra(${i},'name',this.value)" placeholder="เช่น ค่าแรง" style="width:100%;box-sizing:border-box"></div>
     <div class="fld" style="min-width:0"><label>หมายเหตุ</label><input value="${esc(e.note||'')}" oninput="cjSetExtra(${i},'note',this.value)" placeholder="เช่น 6 ชม.×50" style="width:100%;box-sizing:border-box"></div>
@@ -1797,6 +1830,8 @@ function renderCateringForm(){
     ${extraRows}
     <button class="btn-ghost btn-sm" onclick="cjAddExtra()" style="margin-bottom:10px">＋ เพิ่มค่าใช้จ่าย</button>
     <div id="cjTotals" style="margin-bottom:10px">${cjTotalsHTML(j)}</div>
+    <div class="sec-title" style="margin:8px 0 6px">📤 จัดสรรเงินจ๊อบ (%) — แบ่งเป็นหมวด (เช่น หักต้นทุน/ค่าแรง/ค่าไฟ/น้ำมัน/เงินเก็บ)</div>
+    <div id="cjAlloc" style="margin-bottom:10px">${cjAllocHTML(j)}</div>
     <div style="display:flex;gap:10px;align-items:center"><button class="btn-primary btn-sm" onclick="saveCateringJob()">${editing?'💾 บันทึกการแก้ไข':'＋ บันทึกจ๊อบ'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelCatering()">ยกเลิก</button>`:''}<span id="cjSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
 }
 function renderCateringList(){
