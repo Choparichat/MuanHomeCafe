@@ -291,7 +291,7 @@
   <div class="modal" style="max-width:920px">
     <div class="modal-head"><h2>🍱 จ๊อบเบรค / จัดเลี้ยง</h2><button class="btn-ghost btn-sm" onclick="closeCatering()">✕ ปิด</button></div>
     <div class="modal-body">
-      <p class="hint" style="margin-top:0">คิดต้นทุน "ต่อ 1 ชุดเบรค" (กล่อง+เครื่องดื่ม+ขนม ฯลฯ) แล้วคูณจำนวนชุด · พิมพ์ค้นหาของจากคลังเพื่อดึงราคา หรือกรอกเอง · ใส่ % กำไรเพื่อดูราคาขายแนะนำ · บันทึกเก็บประวัติได้</p>
+      <p class="hint" style="margin-top:0">คิดต้นทุน "ต่อ 1 ชุดเบรค" (กล่อง+เครื่องดื่ม+ขนม ฯลฯ) แล้วคูณจำนวนชุด · พิมพ์ค้นหาของจากคลัง/เบส เพื่อดึงราคา หรือกรอกเอง · ใส่ % กำไรเพื่อดูราคาขายแนะนำ · บันทึกเก็บประวัติได้<br>🧪 <b>น้ำสมุนไพรทำเอง</b> (เช่น น้ำกระเจี๊ยบ): ไปสร้างเป็น “เบส” ที่ปุ่ม 🧪 จัดการเบส ก่อน — ใส่ส่วนผสมจากคลัง + ตั้ง “ปริมาณที่ได้” เป็นจำนวนขวด แล้วมาเลือกเบส 🧪 ในรายการนี้ ระบบจะดึงต้นทุนต่อขวดมาให้</p>
       <div id="cjForm" style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft);margin-bottom:14px"></div>
       <div class="sec-title" style="margin:2px 0 6px">📋 จ๊อบที่บันทึกไว้</div>
       <div id="cjList"></div>
@@ -1725,7 +1725,7 @@ function exportOrdersCSV(){
 let cjDraft=null;
 function cjNewItem(){return {id:uid(),name:'',unitCost:'',qty:1};}
 function cjNewDraft(){return {id:'',name:'',date:todayStr(),sets:1,margin:40,price:'',items:[cjNewItem()]};}
-function cjAllCat(){const a=[];(state.ingCatalog||[]).forEach(c=>a.push({name:c.name,unit:ingCatPerUnit(c)}));(state.packCatalog||[]).forEach(c=>a.push({name:c.name,unit:catPerPiece(c)}));(state.otherCatalog||[]).forEach(c=>a.push({name:c.name,unit:otherPerUnit(c)}));return a;}
+function cjAllCat(){const a=[];(state.bases||[]).forEach(b=>a.push({name:'🧪 '+(b.name||'เบส'),unit:basePerUnit(b)}));(state.ingCatalog||[]).forEach(c=>a.push({name:c.name,unit:ingCatPerUnit(c)}));(state.packCatalog||[]).forEach(c=>a.push({name:c.name,unit:catPerPiece(c)}));(state.otherCatalog||[]).forEach(c=>a.push({name:c.name,unit:otherPerUnit(c)}));return a;}
 function cjDataOpts(){return cjAllCat().slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','th',{numeric:true})).map(x=>`<option value="${esc(x.name)}">฿${fmt(x.unit)}/หน่วย</option>`).join('');}
 function cjFindCat(v){v=(v||'').trim().toLowerCase();return cjAllCat().find(x=>(x.name||'').trim().toLowerCase()===v);}
 function cjCostPerSet(j){return (j.items||[]).reduce((s,it)=>s+num(it.unitCost)*num(it.qty),0);}
