@@ -1506,8 +1506,9 @@ function cancelEditOrder(){orderDraft=newOrderDraft();renderOrderForm();}
 function delOrder(id){state.orders=state.orders.filter(o=>o.id!==id);save();renderOrders();}
 // ---- daily ad fee (ค่าโฆษณารายวัน) ----
 function dailyAdsFiltered(){const fm=document.getElementById('odFilterMonth').value;const fp=document.getElementById('odFilterPlat').value;return (state.dailyAds||[]).filter(a=>(!fm||(a.date||'').slice(0,7)===fm)&&(!fp||a.platform===fp));}
-function dailyAdTotal(){return dailyAdsFiltered().reduce((s,a)=>s+num(a.amount),0);}
-function platDailyAd(name){return dailyAdsFiltered().filter(a=>a.platform===name).reduce((s,a)=>s+num(a.amount),0);}
+function dailyAdAmt(type){return dailyAdsFiltered().filter(a=>(a.type||'ad')===type).reduce((s,a)=>s+num(a.amount),0);}
+function dailyExtraTotal(){return dailyAdsFiltered().reduce((s,a)=>s+num(a.amount),0);}
+function platExtra(name){return dailyAdsFiltered().filter(a=>a.platform===name).reduce((s,a)=>s+num(a.amount),0);}
 function feeGPamt(o){return o.feeMode==='baht'?(num(o.gpB)+num(o.gpvatB)):orderGross(o)*num(o.gp)/100;}
 function feeShipAmt(o){return o.feeMode==='baht'?num(o.shipB):orderGross(o)*num(o.ship)/100;}
 function donutCard(header,segs,centerText,colHead){
@@ -1523,19 +1524,22 @@ function donutCard(header,segs,centerText,colHead){
     <div>${legend}</div>
   </div>`;
 }
-function addDailyAd(){const d=document.getElementById('adDate').value,p=document.getElementById('adPlat').value,amt=num(document.getElementById('adAmt').value);if(!(amt>0)){alert('ใส่จำนวนเงินค่าโฆษณา');return;}state.dailyAds=state.dailyAds||[];state.dailyAds.push({id:uid(),date:d||todayStr(),platform:p,amount:amt});save();renderOrders();}
+function addDailyAd(){const d=document.getElementById('adDate').value,p=document.getElementById('adPlat').value,ty=document.getElementById('adType').value,amt=num(document.getElementById('adAmt').value);if(!(amt>0)){alert('ใส่จำนวนเงิน');return;}state.dailyAds=state.dailyAds||[];state.dailyAds.push({id:uid(),date:d||todayStr(),platform:p,type:ty,amount:amt});save();renderOrders();}
 function delDailyAd(id){state.dailyAds=(state.dailyAds||[]).filter(a=>a.id!==id);save();renderOrders();}
 function renderAdSection(){
   const el=document.getElementById('odAds');if(!el)return;
   const platOpts=state.platforms.map(p=>`<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
   const list=dailyAdsFiltered().slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const chips=list.map(a=>`<span style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px;margin:2px">${esc(a.date)} · ${esc(a.platform)} <b style="color:var(--danger)">−฿${fmt(num(a.amount))}</b><button onclick="delDailyAd('${a.id}')" style="border:none;background:none;color:var(--danger);cursor:pointer;font-size:13px;padding:0;line-height:1">✕</button></span>`).join('')||'<span class="hint">ยังไม่มีค่าโฆษณาในช่วงที่เลือก</span>';
+  const tyLabel=t=>t==='withdraw'?'ค่าธรรมเนียมการถอน':'ค่าโฆษณา';
+  const tyColor=t=>t==='withdraw'?'#5b6cc4':'#e8543a';
+  const chips=list.map(a=>{const t=a.type||'ad';return `<span style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px;margin:2px"><span style="width:9px;height:9px;border-radius:50%;background:${tyColor(t)};display:inline-block"></span>${esc(a.date)} · ${esc(a.platform)} · ${tyLabel(t)} <b style="color:var(--danger)">−฿${fmt(num(a.amount))}</b><button onclick="delDailyAd('${a.id}')" style="border:none;background:none;color:var(--danger);cursor:pointer;font-size:13px;padding:0;line-height:1">✕</button></span>`;}).join('')||'<span class="hint">ยังไม่มีรายการในช่วงที่เลือก</span>';
   el.innerHTML=`<div style="border:1px dashed var(--line);border-radius:10px;padding:10px;background:#fff">
-    <div style="font-weight:700;font-size:13px;margin-bottom:6px">📣 ค่าโฆษณารายวัน <span class="hint" style="font-weight:400">(คิดครั้งเดียวต่อวัน · หักจากกำไรรวมของเดือน ไม่ผูกกับออเดอร์)</span></div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:6px">📣 ค่าใช้จ่ายเพิ่มเติม (รายวัน/รายงวด) <span class="hint" style="font-weight:400">(ค่าโฆษณา · ค่าธรรมเนียมการถอน — หักจากกำไรรวม ไม่ผูกกับออเดอร์)</span></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end;margin-bottom:8px">
       <div class="fld"><label>วันที่</label><input id="adDate" type="date" value="${todayStr()}"></div>
       <div class="fld"><label>แพลตฟอร์ม</label><select id="adPlat">${platOpts}</select></div>
-      <div class="fld"><label>ค่าโฆษณา ฿</label><input id="adAmt" type="number" min="0" step="any" placeholder="เช่น 25.77" style="width:120px"></div>
+      <div class="fld"><label>ประเภท</label><select id="adType"><option value="ad">ค่าโฆษณา</option><option value="withdraw">ค่าธรรมเนียมการถอน</option></select></div>
+      <div class="fld"><label>จำนวน ฿</label><input id="adAmt" type="number" min="0" step="any" placeholder="เช่น 25.77" style="width:110px"></div>
       <button class="btn-ghost btn-sm" onclick="addDailyAd()">＋ เพิ่ม</button>
     </div>
     <div>${chips}</div>
@@ -1608,8 +1612,8 @@ function ordersFiltered(){
 function renderOrders(){
   const list=ordersFiltered().slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.time||'').localeCompare(a.time||''));
   const sum=f=>list.reduce((s,o)=>s+f(o),0);
-  const adT=dailyAdTotal();
-  const gross=sum(orderGross),disc=sum(o=>num(o.discount)),fees=sum(orderFees)+adT,net=sum(orderRevenueNet)-adT,cogs=sum(orderCogs),profit=sum(orderProfit)-adT,cups=sum(orderQty);
+  const adT=dailyAdAmt('ad'),wdT=dailyAdAmt('withdraw'),extraT=adT+wdT;
+  const gross=sum(orderGross),disc=sum(o=>num(o.discount)),fees=sum(orderFees)+extraT,net=sum(orderRevenueNet)-extraT,cogs=sum(orderCogs),profit=sum(orderProfit)-extraT,cups=sum(orderQty);
   document.getElementById('odSummary').innerHTML=`
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
       <div class="stat"><div class="label">ออเดอร์ / แก้ว</div><div class="value">${list.length} / ${cups}</div></div>
@@ -1618,12 +1622,12 @@ function renderOrders(){
       <div class="stat"><div class="label">เงินถึงร้าน</div><div class="value" style="color:var(--plat)">฿${fmt(net)}</div></div>
       <div class="stat"><div class="label">กำไรสุทธิ</div><div class="value ${profit>=0?'green':''}" style="${profit<0?'color:var(--danger)':''}">฿${fmt(profit)}</div></div>
     </div>
-    <div class="hint" style="margin-top:8px">ส่วนลดร้านออกรวม ฿${fmt(disc)} · ค่าธรรมเนียม (GP/ค่าส่ง) รวม ฿${fmt(sum(orderFees))} · ค่าโฆษณารายวันรวม ฿${fmt(adT)} · ต้นทุนรวม ฿${fmt(cogs)}</div>
-    <div class="hint">${state.platforms.map(p=>{const sub=list.filter(o=>o.platform===p.name);const pad=platDailyAd(p.name);if(!sub.length&&!pad)return '';return `🛵 ${esc(p.name)}: ${sub.length} ออเดอร์ · เงินถึงร้าน ฿${fmt(sub.reduce((s,o)=>s+orderRevenueNet(o),0)-pad)} · กำไร ฿${fmt(sub.reduce((s,o)=>s+orderProfit(o),0)-pad)}`;}).filter(Boolean).join(' · ')}</div>`;
+    <div class="hint" style="margin-top:8px">ส่วนลดร้านออกรวม ฿${fmt(disc)} · ค่าธรรมเนียม (GP/ค่าส่ง) รวม ฿${fmt(sum(orderFees))} · ค่าโฆษณา ฿${fmt(adT)} · ค่าธรรมเนียมการถอน ฿${fmt(wdT)} · ต้นทุนรวม ฿${fmt(cogs)}</div>
+    <div class="hint">${state.platforms.map(p=>{const sub=list.filter(o=>o.platform===p.name);const pad=platExtra(p.name);if(!sub.length&&!pad)return '';return `🛵 ${esc(p.name)}: ${sub.length} ออเดอร์ · เงินถึงร้าน ฿${fmt(sub.reduce((s,o)=>s+orderRevenueNet(o),0)-pad)} · กำไร ฿${fmt(sub.reduce((s,o)=>s+orderProfit(o),0)-pad)}`;}).filter(Boolean).join(' · ')}</div>`;
   renderAdSection();
   // 2 โดนัท: รายรับ (ยอดขายหลังหักส่วนลด) · รายจ่าย (ค่า GP รวม VAT / ค่าโฆษณา / ค่าส่วนลดค่าส่ง)
   const gpSum=list.reduce((s,o)=>s+feeGPamt(o),0), shipSum=list.reduce((s,o)=>s+feeShipAmt(o),0);
-  const incomeNet=gross-disc, expTotal=gpSum+adT+shipSum;
+  const incomeNet=gross-disc, expTotal=gpSum+adT+wdT+shipSum;
   const chEl=document.getElementById('odChart');
   if(chEl){
     if(gross>0||expTotal>0){
@@ -1638,6 +1642,7 @@ function renderOrders(){
       const exp=donutCard('สรุปแยกตามประเภทรายจ่าย',
         [{label:'ค่า GP (รวม VAT)',v:gpSum,c:'#f4a09c',neg:1},
          {label:'ค่าโฆษณา',v:adT,c:'#e8543a',neg:1},
+         {label:'ค่าธรรมเนียมการถอน',v:wdT,c:'#5b6cc4',neg:1},
          {label:'ค่าส่วนลดค่าส่ง',v:shipSum,c:'#7cc6ef',neg:1}],
         '−฿'+fmt(expTotal),'<span>รายจ่าย (รวม VAT)</span><span>คิดเป็นเงิน (฿)</span>');
       chEl.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">'+inc+exp+'</div>';
@@ -1674,11 +1679,11 @@ function exportOrdersCSV(){
   const rows=[['วันที่','เวลา','แพลตฟอร์ม','รหัส','ลูกค้า','เมนู','แก้ว','ยอดเต็ม','ส่วนลด','ค่าธรรมเนียม(GP/ค่าส่ง)','เงินถึงร้าน','ต้นทุน','กำไรสุทธิ']];
   list.forEach(o=>rows.push([o.date,o.time,o.platform,o.code,o.customer,orderItemsLabel(o).replace(/×/g,'x'),orderQty(o),round2(orderGross(o)),round2(num(o.discount)),round2(orderFees(o)),round2(orderRevenueNet(o)),round2(orderCogs(o)),round2(orderProfit(o))]));
   const sum=f=>list.reduce((s,o)=>s+f(o),0);
-  const adT=dailyAdTotal();
+  const extraT=dailyExtraTotal();
   rows.push([]);rows.push(['รวม','','','','','',sum(orderQty),round2(sum(orderGross)),round2(sum(o=>num(o.discount))),round2(sum(orderFees)),round2(sum(orderRevenueNet)),round2(sum(orderCogs)),round2(sum(orderProfit))]);
   const ads=dailyAdsFiltered().slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  if(ads.length){rows.push([]);rows.push(['ค่าโฆษณารายวัน']);rows.push(['วันที่','แพลตฟอร์ม','ค่าโฆษณา']);ads.forEach(a=>rows.push([a.date,a.platform,round2(num(a.amount))]));rows.push(['รวมค่าโฆษณา','',round2(adT)]);}
-  rows.push([]);rows.push(['กำไรสุทธิหลังหักค่าโฆษณารายวัน','','','','','','','','','','','',round2(sum(orderProfit)-adT)]);
+  if(ads.length){rows.push([]);rows.push(['ค่าใช้จ่ายเพิ่มเติม (โฆษณา/ค่าธรรมเนียมการถอน)']);rows.push(['วันที่','แพลตฟอร์ม','ประเภท','จำนวน']);ads.forEach(a=>rows.push([a.date,a.platform,(a.type==='withdraw'?'ค่าธรรมเนียมการถอน':'ค่าโฆษณา'),round2(num(a.amount))]));rows.push(['รวม','','',round2(extraT)]);}
+  rows.push([]);rows.push(['กำไรสุทธิหลังหักค่าใช้จ่ายเพิ่มเติม','','','','','','','','','','','',round2(sum(orderProfit)-extraT)]);
   const csv='﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ออเดอร์_'+todayStr()+'.csv';a.click();URL.revokeObjectURL(a.href);
