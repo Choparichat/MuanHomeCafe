@@ -773,7 +773,7 @@ function renderBaseList(){
     <div class="base-edit">
       <div class="bhead">
         <div class="fld" style="flex:2"><label>ชื่อเบส</label><input value="${esc(b.name)}" oninput="updBase('${b.id}','name',this.value)"></div>
-        <div class="fld" style="flex:1"><label>ปริมาณเบสที่ได้ (มล./กรัม)</label><input type="number" min="0" step="any" value="${b.yield||''}" placeholder="เช่น 180" oninput="updBase('${b.id}','yield',this.value)"></div>
+        <div class="fld" style="flex:1"><label>ปริมาณที่ได้ (มล./กรัม/ชิ้น)</label><input type="number" min="0" step="any" value="${b.yield||''}" placeholder="เช่น 180 มล. หรือ 9 ชิ้น" oninput="updBase('${b.id}','yield',this.value)"></div>
         <button class="btn-danger btn-sm" onclick="delBase('${b.id}')">ลบเบส</button>
       </div>
       ${b.ingredients.map(i=>{
@@ -790,7 +790,7 @@ function renderBaseList(){
         </div>`;}).join('')}
       <button class="btn-base btn-sm" onclick="addBaseIng('${b.id}')">＋ ส่วนผสม</button>
       <div class="base-sum" id="bsum-${b.id}">${baseSumHTML(b)}</div>
-      <div class="hint">น้ำ/น้ำแข็งใส่ราคาแพ็ก 0 ได้ · ตัวอย่างชาไทย: น้ำร้อน 180 + ตรามือ 10g + ตรามังกรบิน 10g, ปริมาณที่ได้ 180</div>
+      <div class="hint">น้ำ/น้ำแข็งใส่ราคาแพ็ก 0 ได้ · เครื่องดื่ม: ตั้งปริมาณที่ได้เป็น มล. (เช่น ชาไทย 180) · ขนม/เบเกอรี่: ตั้งเป็น “จำนวนชิ้น” (เช่น บราวนี่ 1 ถาด ใส่เนย/แป้ง/ช็อกฯ → ปริมาณที่ได้ = 9 ชิ้น → ได้ต้นทุนต่อชิ้น) แล้วเอาไปใช้ในเมนูขนมด้วยปุ่ม ＋ ใช้เบส/สูตร (จำนวน = 1 ชิ้น)</div>
     </div>`).join('')||'<p class="hint">ยังไม่มีเบส</p>';
 }
 
@@ -1361,7 +1361,7 @@ function cardHTML(m){
       <div id="comps-${m.id}">${m.components.map(c=>compHTML(m,c)).join('')}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-ghost btn-sm" onclick="addSimple('${m.id}')">＋ วัตถุดิบ</button>
-        ${dessert?'':`<button class="btn-base btn-sm" onclick="addBaseUse('${m.id}')" ${noBase?'disabled title="สร้างเบสก่อนในเมนู จัดการเบส"':''}>＋ ใช้เบส</button>`}
+        <button class="btn-base btn-sm" onclick="addBaseUse('${m.id}')" ${noBase?'disabled title="สร้างเบส/สูตรก่อนที่ 🧪 จัดการเบส"':''}>＋ ใช้เบส/สูตร</button>
         <select class="btn-ghost btn-sm" style="color:#2c6fa6;border-color:#cfe0ef;cursor:pointer" onchange="if(this.value){addVariantFromPreset('${m.id}',this.value);this.value='';}">
           <option value="">＋ ตัวเลือก (เลือก/สร้าง)</option>
           ${variantPresets().map(p=>`<option value="${esc(p.groupName)}">＋ ${esc(p.groupName)}</option>`).join('')}
