@@ -215,6 +215,7 @@
         <div class="fld"><label>จำนวนที่ขายได้ (แก้ว/ชิ้น)</label><input id="rsvQty" type="number" min="0" step="1" value="0" oninput="renderReserve()"></div>
       </div>
       <div id="rsvTable" style="margin-top:12px"></div>
+      <div id="pocketTable" style="margin-top:18px"></div>
     </div>
   </div>
 </div>
@@ -873,6 +874,23 @@ function renderReserve(){
     <tr style="border-top:2px solid var(--line)"><td colspan="3" style="font-weight:700">รวมต้องสำรอง</td><td class="num" style="font-weight:700;color:var(--accent)">฿${fmt(total)}</td></tr>
     </tbody></table>
     <p class="hint" style="margin-top:8px">เงินที่เหลือหลังหักสำรองกระเป๋าทั้งหมด = กำไรจริงของคุณ</p>`;
+  renderPockets();
+}
+function pocketAdd(name,amt){state.pockets=state.pockets||[];let p=state.pockets.find(x=>(x.name||'').trim()===(name||'').trim());if(!p){p={id:uid(),name:(name||'กระเป๋า').trim(),balance:0};state.pockets.push(p);}p.balance=num(p.balance)+num(amt);}
+function pocketSpend(id,amt){const p=(state.pockets||[]).find(x=>x.id===id);if(!p)return;p.balance=num(p.balance)-num(amt);save();renderReserve();}
+function pocketSpendInput(id){const el=document.getElementById('psp-'+id);const v=num(el&&el.value);if(!(v>0)){alert('ใส่จำนวนเงินที่จ่ายออก');return;}pocketSpend(id,v);}
+function delPocket(id){if(confirm('ลบกระเป๋านี้? (ยอดสะสมจะหายไป)')){state.pockets=(state.pockets||[]).filter(x=>x.id!==id);save();renderReserve();}}
+function renderPockets(){
+  const el=document.getElementById('pocketTable');if(!el)return;const ps=state.pockets||[];
+  el.innerHTML=`<div class="sec-title" style="margin:6px 0">💰 กระเป๋าเงินเก็บ (ยอดสะสมจากจ๊อบเบรค)</div>`+(ps.length?
+    `<table class="pk-table"><thead><tr><th>กระเป๋า</th><th class="num">ยอดสะสม</th><th>จ่ายออก</th><th></th></tr></thead><tbody>${ps.map(p=>`<tr>
+      <td>${esc(p.name)}</td>
+      <td class="num" style="font-weight:700;color:${num(p.balance)>=0?'var(--accent)':'var(--danger)'}">฿${fmt(num(p.balance))}</td>
+      <td><span style="display:flex;gap:4px;align-items:center"><input type="number" min="0" step="any" id="psp-${p.id}" placeholder="จำนวน" style="width:78px;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-family:inherit"><button class="btn-ghost btn-sm" onclick="pocketSpendInput('${p.id}')">−จ่าย</button></span></td>
+      <td><button class="btn-danger btn-sm" onclick="delPocket('${p.id}')">🗑</button></td>
+    </tr>`).join('')}<tr style="border-top:2px solid var(--line)"><td style="font-weight:700">รวมเงินเก็บทั้งหมด</td><td class="num" style="font-weight:700;color:var(--accent)">฿${fmt(ps.reduce((s,p)=>s+num(p.balance),0))}</td><td colspan="2"></td></tr></tbody></table>
+    <p class="hint" style="margin-top:6px">กระเป๋า “ควรหักต้นทุน” = เงินกันไว้จ่ายค่าวัตถุดิบรอบหน้า · กด −จ่าย เมื่อเอาเงินออกไปใช้จริง (หักจากยอดสะสม)</p>`
+    :`<p class="hint">ยังไม่มีกระเป๋า — ไปที่ 🍱 จ๊อบเบรค กรอกจัดสรร % แล้วกด “🪙 หยอดกระเป๋าตามจัดสรร”</p>`);
 }
 
 // ---------- ledger (รายรับ-รายจ่าย) ----------
@@ -1781,6 +1799,8 @@ function saveCateringJob(){const j=JSON.parse(JSON.stringify(cjDraft));j.items=(
 function editCateringJob(id){const j=state.cateringJobs.find(x=>x.id===id);if(!j)return;cjDraft=JSON.parse(JSON.stringify(j));renderCateringForm();renderCateringList();const f=document.getElementById('cjForm');if(f)f.scrollIntoView({behavior:'smooth',block:'start'});}
 function cancelCatering(){cjDraft=cjNewDraft();renderCateringForm();}
 function delCateringJob(id){if(confirm('ลบจ๊อบนี้?')){state.cateringJobs=state.cateringJobs.filter(x=>x.id!==id);save();renderCateringList();}}
+function cjDepositPockets(){const j=cjDraft;const ba=cjAllocBaseAmt(j);if(!(ba>0)){alert('ยังไม่มีจำนวนเงินให้จัดสรร (เช็คฐานที่ใช้แบ่ง)');return;}const tp=(j.allocs||[]).reduce((s,a)=>s+num(a.pct),0);if(Math.abs(tp-100)>0.5&&!confirm('รวม % = '+fmt(tp)+'% (ไม่ครบ 100%) จะหยอดตามนี้ต่อไหม?'))return;let log=[];(j.allocs||[]).forEach(a=>{const amt=ba*num(a.pct)/100;if(amt>0){pocketAdd(a.name,amt);log.push(a.name+': +฿'+fmt(amt));}});save();alert('หยอดกระเป๋าแล้ว ✓\n\n'+log.join('\n')+'\n\nดูยอดสะสมที่ 🪙 เงินสำรองหยอดกระเป๋า');}
+function cjToLedger(){const j=cjDraft;const rev=cjPricePerSet(j)*num(j.sets);if(!(rev>0)){alert('ยังไม่มีรายได้ (ใส่ราคาขาย/ชุด และจำนวนชุดก่อน)');return;}if(!confirm('บันทึกรายรับ ฿'+fmt(rev)+' จากจ๊อบ "'+(j.name||'(ไม่ตั้งชื่อ)')+'" เข้าบัญชีรายรับ-รายจ่าย?'))return;state.ledger=state.ledger||[];state.ledger.push({id:uid(),date:j.date||todayStr(),kind:'in',source:'ร้าน',channel:'เบรค/จัดเลี้ยง',note:'เบรค: '+(j.name||''),amount:round2(rev)});save();alert('บันทึกรายรับแล้ว ✓ (ดูที่ 📒 บัญชีรับ-จ่าย)');}
 function cjUpdateTotals(){const el=document.getElementById('cjTotals');if(el)el.innerHTML=cjTotalsHTML(cjDraft);(cjDraft.items||[]).forEach((it,i)=>{const e=document.getElementById('cjline-'+i);if(e)e.textContent='฿'+fmt(num(it.unitCost)*num(it.qty));});
   const ba=cjAllocBaseAmt(cjDraft);const be=document.getElementById('cjalloc-base');if(be)be.textContent='฿'+fmt(ba);
   (cjDraft.allocs||[]).forEach((a,i)=>{const e=document.getElementById('cjalloc-amt-'+i);if(e)e.textContent='฿'+fmt(ba*num(a.pct)/100);});
@@ -1832,7 +1852,7 @@ function renderCateringForm(){
     <div id="cjTotals" style="margin-bottom:10px">${cjTotalsHTML(j)}</div>
     <div class="sec-title" style="margin:8px 0 6px">📤 จัดสรรเงินจ๊อบ (%) — แบ่งเป็นหมวด (เช่น หักต้นทุน/ค่าแรง/ค่าไฟ/น้ำมัน/เงินเก็บ)</div>
     <div id="cjAlloc" style="margin-bottom:10px">${cjAllocHTML(j)}</div>
-    <div style="display:flex;gap:10px;align-items:center"><button class="btn-primary btn-sm" onclick="saveCateringJob()">${editing?'💾 บันทึกการแก้ไข':'＋ บันทึกจ๊อบ'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelCatering()">ยกเลิก</button>`:''}<span id="cjSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn-primary btn-sm" onclick="saveCateringJob()">${editing?'💾 บันทึกการแก้ไข':'＋ บันทึกจ๊อบ'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelCatering()">ยกเลิก</button>`:''}<button class="btn-ghost btn-sm" onclick="cjDepositPockets()">🪙 หยอดกระเป๋าตามจัดสรร</button><button class="btn-ghost btn-sm" onclick="cjToLedger()">➕ ลงรายรับในบัญชี</button><span id="cjSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
 }
 function renderCateringList(){
   const list=(state.cateringJobs||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
