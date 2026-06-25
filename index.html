@@ -1896,10 +1896,10 @@ function renderCateringList(){
 }
 // ---------- court / สนามแบต sales ----------
 let ctDraft=null;
-function ctNewItem(){return {menuId:'',name:'',qty:1,price:0};}
+function ctNewItem(){return {menuId:'',name:'',qty:1,sweet:100,blend:false,price:0};}
 function ctNewDraft(){return {id:'',date:todayStr(),channel:'หน้าร้าน',note:'',items:[ctNewItem()]};}
 function ctRevenue(c){return (c.items||[]).reduce((s,it)=>s+num(it.price)*num(it.qty),0);}
-function ctItemCogs(it){if(it.menuId){const m=state.menus.find(x=>x.id===it.menuId);if(m)return fullCost(m)*num(it.qty);}return 0;}
+function ctItemCogs(it){if(it.menuId){const m=state.menus.find(x=>x.id===it.menuId);if(m){const lv=(it.sweet!=null&&it.sweet!=='')?num(it.sweet):(m.sweetRef||100);const bl=!!it.blend;return (totalAt(m,lv,bl)+overheadTotal()+(bl?blendExtra(m):0))*num(it.qty);}}return 0;}
 function ctCogs(c){return (c.items||[]).reduce((s,it)=>s+ctItemCogs(it),0);}
 function ctProfit(c){return ctRevenue(c)-ctCogs(c);}
 function ctQty(c){return (c.items||[]).reduce((s,it)=>s+num(it.qty),0);}
@@ -1919,11 +1919,13 @@ function ctToLedger(){const c=ctDraft;const rev=ctRevenue(c);if(!(rev>0)){alert(
 function ctUpdatePreview(){const el=document.getElementById('ctPreview');if(!el)return;const c=ctDraft;el.innerHTML=`ยอดขาย <b>฿${fmt(ctRevenue(c))}</b> · ต้นทุน ฿${fmt(ctCogs(c))} · กำไร <b style="color:${ctProfit(c)>=0?'var(--accent)':'var(--danger)'}">฿${fmt(ctProfit(c))}</b>`;(c.items||[]).forEach((it,i)=>{const e=document.getElementById('ctline-'+i);if(e)e.textContent='฿'+fmt(num(it.price)*num(it.qty));});}
 function renderCourtForm(){
   const c=ctDraft;const editing=c.id&&(state.courtLogs||[]).some(x=>x.id===c.id);
-  const rows=c.items.map((it,i)=>{const linked=!!it.menuId;return `<div style="display:grid;grid-template-columns:1.8fr ${linked?'':'1.2fr '}auto auto auto auto;gap:6px;align-items:end;margin-bottom:6px">
+  const rows=c.items.map((it,i)=>{const linked=!!it.menuId;return `<div style="display:grid;grid-template-columns:1.8fr ${linked?'':'1.2fr '}auto auto auto auto auto auto;gap:6px;align-items:end;margin-bottom:6px">
     <div class="fld" style="min-width:0"><label>เมนู</label><input list="ctmdl-${i}" value="${esc(it.name||'')}" placeholder="พิมพ์ค้นหาเมนู / ชื่อเอง" onchange="ctPickMenu(${i},this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:13px"><datalist id="ctmdl-${i}">${ctMenuOpts()}</datalist></div>
     ${linked?'':`<div class="fld"><label>ชื่อ (พิมพ์เอง)</label><input value="${esc(it.name)}" oninput="ctSetItem(${i},'name',this.value)"></div>`}
-    <div class="fld"><label>จำนวน</label><input type="number" min="0" step="1" style="width:62px;text-align:right" value="${it.qty}" oninput="ctSetItem(${i},'qty',this.value)"></div>
-    <div class="fld"><label>ราคา/ชิ้น ฿</label><input type="number" min="0" step="any" style="width:80px;text-align:right" value="${it.price}" oninput="ctSetItem(${i},'price',this.value)"></div>
+    <div class="fld"><label>จำนวน</label><input type="number" min="0" step="1" style="width:58px;text-align:right" value="${it.qty}" oninput="ctSetItem(${i},'qty',this.value)"></div>
+    <div class="fld"><label>หวาน</label><select onchange="ctSetItem(${i},'sweet',this.value)">${[100,50,25,0].map(s=>`<option value="${s}" ${String(it.sweet)===String(s)?'selected':''}>${s}%</option>`).join('')}<option value="" ${it.sweet===''?'selected':''}>-</option></select></div>
+    <div class="fld"><label>ปั่น</label><input type="checkbox" ${it.blend?'checked':''} onchange="ctSetItem(${i},'blend',this.checked)" style="width:20px;height:20px;margin:6px 0"></div>
+    <div class="fld"><label>ราคา/ชิ้น ฿</label><input type="number" min="0" step="any" style="width:78px;text-align:right" value="${it.price}" oninput="ctSetItem(${i},'price',this.value)"></div>
     <div class="fld"><label>รวม</label><span id="ctline-${i}" style="font-weight:600;color:var(--brand);padding:6px 0;display:inline-block">฿${fmt(num(it.price)*num(it.qty))}</span></div>
     <button class="btn-danger btn-sm" onclick="ctDelItem(${i})" title="ลบ">✕</button>
   </div>`;}).join('');
