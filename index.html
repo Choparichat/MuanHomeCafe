@@ -1583,9 +1583,9 @@ function renderOrderForm(){
       <div class="fld"><label>เวลา</label><input type="time" value="${esc(o.time)}" onchange="odSet('time',this.value)"></div>
       <div class="fld"><label>รหัสออเดอร์</label><input value="${esc(o.code)}" oninput="odSet('code',this.value)" placeholder="เช่น #0545"></div>
       <div class="fld"><label>ชื่อลูกค้า</label><input value="${esc(o.customer)}" oninput="odSet('customer',this.value)" placeholder="ชื่อ/ชื่อเล่น"></div>
-      <div class="fld"><label>ช่องทางรับเงิน</label><select onchange="odSet('payType',this.value);renderOrderForm()">
+      <div class="fld" style="min-width:0"><label>ช่องทางรับเงิน</label><select onchange="odSet('payType',this.value);renderOrderForm()" style="width:100%;max-width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px">
         <option value="epay" ${o.payType==='thaiboon'?'':'selected'}>E-payment (ปกติ)</option>
-        <option value="thaiboon" ${o.payType==='thaiboon'?'selected':''}>ไทยช่วยไทย (รัฐ 60% / ลูกค้า 40%)</option>
+        <option value="thaiboon" ${o.payType==='thaiboon'?'selected':''}>ไทยช่วยไทย (รัฐ 60/40)</option>
       </select></div>
     </div>
     ${o.payType==='thaiboon'?`<div class="hint" style="margin:-4px 0 8px;color:var(--brand)">🇹🇭 ไทยช่วยไทย: เงินขายเข้า “ถุงเงิน” (รัฐออก 60% · ลูกค้าออก 40% ผ่าน G-Wallet) · LINE MAN หักเฉพาะค่า GP+VAT</div>`:''}
