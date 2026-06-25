@@ -170,6 +170,7 @@
     <button class="btn-ghost" onclick="openLedger()">📒 บัญชีรับ-จ่าย</button>
     <button class="btn-ghost" onclick="openOrders()">🧾 บันทึกออเดอร์ LM/Grab</button>
     <button class="btn-ghost" onclick="openCatering()">🍱 จ๊อบเบรค/จัดเลี้ยง</button>
+    <button class="btn-ghost" onclick="openCourt()">🏸 สนามแบต</button>
     <button class="btn-ghost" onclick="openSweetTable()">📊 ตารางเทียบความหวาน</button>
     <button class="btn-ghost" onclick="openReserve()">🪙 เงินสำรอง/กระเป๋า</button>
     <button class="btn-ghost" onclick="exportCSV()">⬇ ส่งออก CSV</button>
@@ -178,6 +179,11 @@
     <input id="backupFile" type="file" accept=".json,application/json" style="display:none" onchange="importBackupFile(this)">
     <button class="btn-ghost" onclick="setShopName()">✎ ชื่อร้าน</button>
     <button class="btn-danger" onclick="clearAll()">🗑 ล้างทั้งหมด</button>
+  </div>
+  <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap">
+    <button class="btn-ghost btn-sm" id="mtab-all" onclick="setMenuType('all')">ทั้งหมด</button>
+    <button class="btn-ghost btn-sm" id="mtab-drink" onclick="setMenuType('drink')">🥤 เครื่องดื่ม</button>
+    <button class="btn-ghost btn-sm" id="mtab-dessert" onclick="setMenuType('dessert')">🍪 ขนม</button>
   </div>
   <div class="controls">
     <input id="searchBox" placeholder="🔍 ค้นหาชื่อเมนู" oninput="setSearch(this.value)">
@@ -296,6 +302,21 @@
       <div id="cjForm" style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft);margin-bottom:14px"></div>
       <div class="sec-title" style="margin:2px 0 6px">📋 จ๊อบที่บันทึกไว้</div>
       <div id="cjList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Court (สนามแบต) sales modal -->
+<div class="overlay" id="courtOverlay">
+  <div class="modal" style="max-width:900px">
+    <div class="modal-head"><h2>🏸 ส่งขายสนามแบต</h2><button class="btn-ghost btn-sm" onclick="closeCourt()">✕ ปิด</button></div>
+    <div class="modal-body">
+      <p class="hint" style="margin-top:0">บันทึกการส่งคุกกี้/บราวนี่ไปขายที่สนามแบตรายสัปดาห์ — เลือกเมนู+จำนวน+ราคา ระบบคิดยอดขาย/ต้นทุน/กำไร · กด “ลงรายรับในบัญชี” (ช่องทาง “สนามแบต”) ได้</p>
+      <div id="ctForm" style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft);margin-bottom:14px"></div>
+      <div class="controls" style="margin:12px 0"><span class="lbl">เดือน</span><input id="ctFilterMonth" type="month" onchange="renderCourtList()"><button class="btn-ghost btn-sm" onclick="document.getElementById('ctFilterMonth').value='';renderCourtList();">ดูทั้งหมด</button></div>
+      <div id="ctSummary"></div>
+      <div class="sec-title" style="margin:10px 0 6px">📋 รายการส่งสนามแบต</div>
+      <div id="ctTable"></div>
     </div>
   </div>
 </div>
@@ -1430,11 +1451,15 @@ function refreshCard(id){
   const tmp=document.createElement('div');tmp.innerHTML=cardHTML(m);
   if(el.querySelector('.photo').innerHTML!==tmp.querySelector('.photo').innerHTML)el.querySelector('.photo').replaceWith(tmp.querySelector('.photo'));
 }
-let openMenuId=null, searchQ='', sortBy='name';
+let openMenuId=null, searchQ='', sortBy='name', menuTypeFilter='all';
 function setSearch(v){searchQ=v;render();}
 function setSort(v){sortBy=v;render();}
+function setMenuType(v){menuTypeFilter=v;render();}
+function updateMenuTabs(){['all','drink','dessert'].forEach(t=>{const b=document.getElementById('mtab-'+t);if(!b)return;const on=menuTypeFilter===t;b.style.background=on?'var(--brand)':'';b.style.color=on?'#fff':'';b.style.borderColor=on?'var(--brand)':'';});}
 function visibleMenus(){
   let arr=state.menus.slice();
+  if(menuTypeFilter==='drink')arr=arr.filter(m=>m.type!=='dessert');
+  else if(menuTypeFilter==='dessert')arr=arr.filter(m=>m.type==='dessert');
   const q=searchQ.trim().toLowerCase();
   if(q)arr=arr.filter(m=>(m.name||'').toLowerCase().includes(q));
   if(sortBy==='name')arr.sort((a,b)=>(a.name||'').localeCompare(b.name||'','th'));
@@ -1458,7 +1483,7 @@ function tileHTML(m){
     <div class="tinfo">${head}${plats}</div>
   </div>`;
 }
-function render(){refreshSummary();updateCampBtn();const g=document.getElementById('grid');
+function render(){refreshSummary();updateCampBtn();updateMenuTabs();const g=document.getElementById('grid');
   const list=visibleMenus();
   const empty=(searchQ.trim()&&!list.length)?`<div class="empty" style="grid-column:1/-1"><div class="ico">🔍</div><p>ไม่พบเมนูที่ตรงกับ “${esc(searchQ)}”</p></div>`:'';
   g.innerHTML=empty+list.map(tileHTML).join('')+`<div class="tile add" onclick="addMenu()">＋ เพิ่มเมนู</div>`;}
@@ -1864,6 +1889,70 @@ function renderCateringList(){
       <div class="hint" style="margin-top:4px">ต้นทุน/ชุด ฿${fmt(cjCostPerSet(j))} · ราคาขาย/ชุด ฿${fmt(cjPricePerSet(j))} · กำไร/ชุด <b style="color:${ppf>=0?'var(--accent)':'var(--danger)'}">฿${fmt(ppf)}</b> · ต้นทุนรวม ฿${fmt(cjTotalCost(j))} · กำไรรวม <b style="color:${cjProfitTotal(j)>=0?'var(--accent)':'var(--danger)'}">฿${fmt(cjProfitTotal(j))}</b></div>
     </div>`;}).join(''):'<p class="hint">ยังไม่มีจ๊อบที่บันทึก</p>';
 }
+// ---------- court / สนามแบต sales ----------
+let ctDraft=null;
+function ctNewItem(){return {menuId:'',name:'',qty:1,price:0};}
+function ctNewDraft(){return {id:'',date:todayStr(),note:'',items:[ctNewItem()]};}
+function ctRevenue(c){return (c.items||[]).reduce((s,it)=>s+num(it.price)*num(it.qty),0);}
+function ctItemCogs(it){if(it.menuId){const m=state.menus.find(x=>x.id===it.menuId);if(m)return fullCost(m)*num(it.qty);}return 0;}
+function ctCogs(c){return (c.items||[]).reduce((s,it)=>s+ctItemCogs(it),0);}
+function ctProfit(c){return ctRevenue(c)-ctCogs(c);}
+function ctQty(c){return (c.items||[]).reduce((s,it)=>s+num(it.qty),0);}
+function ctMenuOpts(){return state.menus.map(m=>`<option value="${esc(m.name||'(ไม่มีชื่อ)')}">฿${fmt(num(m.price))}</option>`).join('');}
+function openCourt(){state.courtLogs=state.courtLogs||[];if(!ctDraft)ctDraft=ctNewDraft();const fm=document.getElementById('ctFilterMonth');if(fm&&!fm.value)fm.value=todayStr().slice(0,7);renderCourtForm();renderCourtList();document.getElementById('courtOverlay').classList.add('open');}
+function closeCourt(){document.getElementById('courtOverlay').classList.remove('open');}
+function ctSet(field,val){ctDraft[field]=val;ctUpdatePreview();}
+function ctSetItem(i,field,val){ctDraft.items[i][field]=val;ctUpdatePreview();}
+function ctPickMenu(i,val){const it=ctDraft.items[i];const v=(val||'').trim().toLowerCase();const m=state.menus.find(x=>(x.name||'').trim().toLowerCase()===v);if(m){it.menuId=m.id;it.name=m.name;if(!(num(it.price)>0))it.price=num(m.price);}else{it.menuId='';it.name=(val||'').trim();}renderCourtForm();}
+function ctAddItem(){ctDraft.items.push(ctNewItem());renderCourtForm();}
+function ctDelItem(i){ctDraft.items.splice(i,1);if(!ctDraft.items.length)ctDraft.items.push(ctNewItem());renderCourtForm();}
+function saveCourt(){const c=JSON.parse(JSON.stringify(ctDraft));c.items=(c.items||[]).filter(it=>it.menuId||(it.name||'').trim()||num(it.qty)>0);if(!c.items.length){alert('ใส่อย่างน้อย 1 เมนู');return;}const idx=c.id?state.courtLogs.findIndex(x=>x.id===c.id):-1;if(idx>=0){state.courtLogs[idx]=c;}else{c.id=uid();state.courtLogs.push(c);}save();ctDraft=ctNewDraft();renderCourtForm();renderCourtList();const t=document.getElementById('ctSaved');if(t){t.textContent=idx>=0?'✓ แก้ไขแล้ว':'✓ บันทึกแล้ว';setTimeout(()=>{if(t)t.textContent='';},1500);}}
+function editCourt(id){const c=state.courtLogs.find(x=>x.id===id);if(!c)return;ctDraft=JSON.parse(JSON.stringify(c));renderCourtForm();renderCourtList();const f=document.getElementById('ctForm');if(f)f.scrollIntoView({behavior:'smooth',block:'start'});}
+function cancelCourt(){ctDraft=ctNewDraft();renderCourtForm();}
+function delCourt(id){if(confirm('ลบรายการนี้?')){state.courtLogs=state.courtLogs.filter(x=>x.id!==id);save();renderCourtList();}}
+function ctToLedger(){const c=ctDraft;const rev=ctRevenue(c);if(!(rev>0)){alert('ยังไม่มียอดขาย');return;}if(!confirm('บันทึกรายรับ ฿'+fmt(rev)+' (สนามแบต) เข้าบัญชีรายรับ-รายจ่าย?'))return;state.ledger=state.ledger||[];state.ledger.push({id:uid(),date:c.date||todayStr(),kind:'in',source:'สนามแบต',channel:'สนามแบต',note:'สนามแบต'+(c.note?' '+c.note:''),amount:round2(rev)});save();alert('บันทึกรายรับแล้ว ✓ (ดูที่ 📒 บัญชีรับ-จ่าย)');}
+function ctUpdatePreview(){const el=document.getElementById('ctPreview');if(!el)return;const c=ctDraft;el.innerHTML=`ยอดขาย <b>฿${fmt(ctRevenue(c))}</b> · ต้นทุน ฿${fmt(ctCogs(c))} · กำไร <b style="color:${ctProfit(c)>=0?'var(--accent)':'var(--danger)'}">฿${fmt(ctProfit(c))}</b>`;(c.items||[]).forEach((it,i)=>{const e=document.getElementById('ctline-'+i);if(e)e.textContent='฿'+fmt(num(it.price)*num(it.qty));});}
+function renderCourtForm(){
+  const c=ctDraft;const editing=c.id&&(state.courtLogs||[]).some(x=>x.id===c.id);
+  const rows=c.items.map((it,i)=>{const linked=!!it.menuId;return `<div style="display:grid;grid-template-columns:1.8fr ${linked?'':'1.2fr '}auto auto auto auto;gap:6px;align-items:end;margin-bottom:6px">
+    <div class="fld" style="min-width:0"><label>เมนู</label><input list="ctmdl-${i}" value="${esc(it.name||'')}" placeholder="พิมพ์ค้นหาเมนู / ชื่อเอง" onchange="ctPickMenu(${i},this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:13px"><datalist id="ctmdl-${i}">${ctMenuOpts()}</datalist></div>
+    ${linked?'':`<div class="fld"><label>ชื่อ (พิมพ์เอง)</label><input value="${esc(it.name)}" oninput="ctSetItem(${i},'name',this.value)"></div>`}
+    <div class="fld"><label>จำนวน</label><input type="number" min="0" step="1" style="width:62px;text-align:right" value="${it.qty}" oninput="ctSetItem(${i},'qty',this.value)"></div>
+    <div class="fld"><label>ราคา/ชิ้น ฿</label><input type="number" min="0" step="any" style="width:80px;text-align:right" value="${it.price}" oninput="ctSetItem(${i},'price',this.value)"></div>
+    <div class="fld"><label>รวม</label><span id="ctline-${i}" style="font-weight:600;color:var(--brand);padding:6px 0;display:inline-block">฿${fmt(num(it.price)*num(it.qty))}</span></div>
+    <button class="btn-danger btn-sm" onclick="ctDelItem(${i})" title="ลบ">✕</button>
+  </div>`;}).join('');
+  document.getElementById('ctForm').innerHTML=`
+    ${editing?`<div style="background:#fff4e6;border:1px solid #f0c98a;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:13px;font-weight:600;color:var(--brand)">✎ กำลังแก้ไขรายการ ${esc(c.date||'')}</div>`:''}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px">
+      <div class="fld"><label>วันที่ส่ง</label><input type="date" value="${esc(c.date)}" onchange="ctSet('date',this.value)"></div>
+      <div class="fld"><label>โน้ต</label><input value="${esc(c.note||'')}" oninput="ctSet('note',this.value)" placeholder="เช่น สัปดาห์ที่ 1"></div>
+    </div>
+    <div class="sec-title" style="margin:2px 0 6px">เมนูที่ส่ง</div>
+    ${rows}
+    <button class="btn-ghost btn-sm" onclick="ctAddItem()" style="margin-bottom:10px">＋ เพิ่มเมนู</button>
+    <div id="ctPreview" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn-primary btn-sm" onclick="saveCourt()">${editing?'💾 บันทึกการแก้ไข':'＋ บันทึก'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelCourt()">ยกเลิก</button>`:''}<button class="btn-ghost btn-sm" onclick="ctToLedger()">➕ ลงรายรับในบัญชี</button><span id="ctSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
+  ctUpdatePreview();
+}
+function ctFiltered(){const fm=document.getElementById('ctFilterMonth').value;return (state.courtLogs||[]).filter(c=>!fm||(c.date||'').slice(0,7)===fm);}
+function renderCourtList(){
+  const list=ctFiltered().slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const sum=f=>list.reduce((s,c)=>s+f(c),0);
+  document.getElementById('ctSummary').innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
+    <div class="stat"><div class="label">ครั้ง / ชิ้น</div><div class="value">${list.length} / ${sum(ctQty)}</div></div>
+    <div class="stat"><div class="label">ยอดขายรวม</div><div class="value brown">฿${fmt(sum(ctRevenue))}</div></div>
+    <div class="stat"><div class="label">ต้นทุนรวม</div><div class="value brown">฿${fmt(sum(ctCogs))}</div></div>
+    <div class="stat"><div class="label">กำไรรวม</div><div class="value ${sum(ctProfit)>=0?'green':''}" style="${sum(ctProfit)<0?'color:var(--danger)':''}">฿${fmt(sum(ctProfit))}</div></div>
+  </div>`;
+  document.getElementById('ctTable').innerHTML=list.length?`<table class="pk-table"><thead><tr><th>วันที่</th><th>โน้ต</th><th>เมนู</th><th class="num">ชิ้น</th><th class="num">ยอดขาย</th><th class="num">ต้นทุน</th><th class="num">กำไร</th><th></th></tr></thead><tbody>${list.map(c=>{const pf=ctProfit(c);return `<tr>
+    <td style="white-space:nowrap">${esc(c.date)}</td><td>${esc(c.note||'')}</td>
+    <td style="min-width:160px">${(c.items||[]).map(it=>esc(it.name||'(เมนู)')+(num(it.qty)>1?' ×'+num(it.qty):'')).join(', ')}</td>
+    <td class="num">${ctQty(c)}</td><td class="num">฿${fmt(ctRevenue(c))}</td><td class="num">฿${fmt(ctCogs(c))}</td>
+    <td class="num" style="font-weight:700;color:${pf>=0?'var(--accent)':'var(--danger)'}">฿${fmt(pf)}</td>
+    <td style="white-space:nowrap"><button class="btn-ghost btn-sm" style="padding:2px 8px" onclick="editCourt('${c.id}')">✎</button> <button class="del" style="color:var(--danger);background:none;padding:2px 6px" onclick="delCourt('${c.id}')">✕</button></td>
+  </tr>`;}).join('')}</tbody></table>`:'<p class="hint">ยังไม่มีรายการในช่วงที่เลือก</p>';
+}
 // ---------- sweetness recipe table (ตารางสูตรเทียบความหวาน) ----------
 function openSweetTable(){renderSweetTable();document.getElementById('sweetOverlay').classList.add('open');}
 function closeSweetTable(){document.getElementById('sweetOverlay').classList.remove('open');}
@@ -1975,6 +2064,7 @@ document.getElementById('menuOverlay').addEventListener('click',e=>{if(e.target.
 document.getElementById('ledgerOverlay').addEventListener('click',e=>{if(e.target.id==='ledgerOverlay')closeLedger();});
 document.getElementById('ordersOverlay').addEventListener('click',e=>{if(e.target.id==='ordersOverlay')closeOrders();});
 document.getElementById('cateringOverlay').addEventListener('click',e=>{if(e.target.id==='cateringOverlay')closeCatering();});
+document.getElementById('courtOverlay').addEventListener('click',e=>{if(e.target.id==='courtOverlay')closeCourt();});
 document.getElementById('sweetOverlay').addEventListener('click',e=>{if(e.target.id==='sweetOverlay')closeSweetTable();});
 document.getElementById('reserveOverlay').addEventListener('click',e=>{if(e.target.id==='reserveOverlay')closeReserve();});
 
