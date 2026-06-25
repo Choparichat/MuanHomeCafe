@@ -1724,15 +1724,17 @@ function exportOrdersCSV(){
 // ---------- catering / break jobs (จ๊อบเบรค/จัดเลี้ยง) ----------
 let cjDraft=null;
 function cjNewItem(){return {id:uid(),name:'',unitCost:'',qty:1};}
-function cjNewDraft(){return {id:'',name:'',date:todayStr(),sets:1,margin:40,price:'',items:[cjNewItem()]};}
+function cjNewDraft(){return {id:'',name:'',date:todayStr(),sets:1,margin:40,price:'',extraCost:'',items:[cjNewItem()]};}
 function cjAllCat(){const a=[];(state.bases||[]).forEach(b=>a.push({name:'🧪 '+(b.name||'เบส'),unit:basePerUnit(b)}));(state.ingCatalog||[]).forEach(c=>a.push({name:c.name,unit:ingCatPerUnit(c)}));(state.packCatalog||[]).forEach(c=>a.push({name:c.name,unit:catPerPiece(c)}));(state.otherCatalog||[]).forEach(c=>a.push({name:c.name,unit:otherPerUnit(c)}));return a;}
 function cjDataOpts(){return cjAllCat().slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'','th',{numeric:true})).map(x=>`<option value="${esc(x.name)}">฿${fmt(x.unit)}/หน่วย</option>`).join('');}
 function cjFindCat(v){v=(v||'').trim().toLowerCase();return cjAllCat().find(x=>(x.name||'').trim().toLowerCase()===v);}
-function cjCostPerSet(j){return (j.items||[]).reduce((s,it)=>s+num(it.unitCost)*num(it.qty),0);}
-function cjTotalCost(j){return cjCostPerSet(j)*num(j.sets);}
-function cjSugg(j){const c=cjCostPerSet(j),m=num(j.margin);return (m>0&&m<100)?c/(1-m/100):c;}
+function cjMatPerSet(j){return (j.items||[]).reduce((s,it)=>s+num(it.unitCost)*num(it.qty),0);}
+function cjCostPerSet(j){return cjMatPerSet(j);}
+function cjTotalCost(j){return cjMatPerSet(j)*num(j.sets)+num(j.extraCost);}
+function cjCostPerSetAll(j){const n=num(j.sets);return n>0?cjTotalCost(j)/n:cjMatPerSet(j);}
+function cjSugg(j){const c=cjCostPerSetAll(j),m=num(j.margin);return (m>0&&m<100)?c/(1-m/100):c;}
 function cjPricePerSet(j){return num(j.price)>0?num(j.price):cjSugg(j);}
-function cjProfitPerSet(j){return cjPricePerSet(j)-cjCostPerSet(j);}
+function cjProfitPerSet(j){return cjPricePerSet(j)-cjCostPerSetAll(j);}
 function cjProfitTotal(j){return cjProfitPerSet(j)*num(j.sets);}
 function openCatering(){state.cateringJobs=state.cateringJobs||[];if(!cjDraft)cjDraft=cjNewDraft();renderCateringForm();renderCateringList();document.getElementById('cateringOverlay').classList.add('open');}
 function closeCatering(){document.getElementById('cateringOverlay').classList.remove('open');}
@@ -1747,10 +1749,11 @@ function cancelCatering(){cjDraft=cjNewDraft();renderCateringForm();}
 function delCateringJob(id){if(confirm('ลบจ๊อบนี้?')){state.cateringJobs=state.cateringJobs.filter(x=>x.id!==id);save();renderCateringList();}}
 function cjUpdateTotals(){const el=document.getElementById('cjTotals');if(el)el.innerHTML=cjTotalsHTML(cjDraft);(cjDraft.items||[]).forEach((it,i)=>{const e=document.getElementById('cjline-'+i);if(e)e.textContent='฿'+fmt(num(it.unitCost)*num(it.qty));});}
 function cjTotalsHTML(j){
-  const cps=cjCostPerSet(j),tot=cjTotalCost(j),sugg=cjSugg(j),pps=cjPricePerSet(j),ppf=cjProfitPerSet(j),ptot=cjProfitTotal(j),mp=pps>0?ppf/pps*100:0;
+  const cps=cjCostPerSet(j),cpa=cjCostPerSetAll(j),tot=cjTotalCost(j),sugg=cjSugg(j),pps=cjPricePerSet(j),ppf=cjProfitPerSet(j),ptot=cjProfitTotal(j),mp=pps>0?ppf/pps*100:0;
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
-    <div class="stat"><div class="label">ต้นทุน/ชุด</div><div class="value brown">฿${fmt(cps)}</div></div>
-    <div class="stat"><div class="label">ต้นทุนรวม (${fmt(num(j.sets))} ชุด)</div><div class="value brown">฿${fmt(tot)}</div></div>
+    <div class="stat"><div class="label">วัตถุดิบ/ชุด</div><div class="value brown">฿${fmt(cps)}</div></div>
+    <div class="stat"><div class="label">ต้นทุน/ชุด (รวมอื่นๆ)</div><div class="value brown">฿${fmt(cpa)}</div></div>
+    <div class="stat"><div class="label">ต้นทุนรวม (${fmt(num(j.sets))} ชุด+อื่นๆ)</div><div class="value brown">฿${fmt(tot)}</div></div>
     <div class="stat"><div class="label">ราคาขายแนะนำ/ชุด</div><div class="value" style="color:var(--brand2)">฿${fmt(sugg)}</div></div>
     <div class="stat"><div class="label">กำไร/ชุด</div><div class="value ${ppf>=0?'green':''}" style="${ppf<0?'color:var(--danger)':''}">฿${fmt(ppf)} (${fmt(mp)}%)</div></div>
     <div class="stat"><div class="label">กำไรรวม</div><div class="value ${ptot>=0?'green':''}" style="${ptot<0?'color:var(--danger)':''}">฿${fmt(ptot)}</div></div>
@@ -1773,6 +1776,7 @@ function renderCateringForm(){
       <div class="fld"><label>จำนวนชุด</label><input type="number" min="0" step="1" value="${j.sets}" oninput="cjSet('sets',this.value)"></div>
       <div class="fld"><label>กำไรที่ต้องการ %</label><input type="number" min="0" max="99" step="any" value="${j.margin}" oninput="cjSet('margin',this.value)"></div>
       <div class="fld"><label>ราคาขายจริง/ชุด ฿</label><input type="number" min="0" step="any" value="${j.price}" placeholder="${Math.ceil(cjSugg(j))||0}" oninput="cjSet('price',this.value)"></div>
+      <div class="fld"><label title="ค่าแรง/ค่าน้ำมัน/ค่ากาว/ป้ายราคา ฯลฯ รวมทั้งงาน">ค่าใช้จ่ายอื่น (ทั้งงาน) ฿</label><input type="number" min="0" step="any" value="${j.extraCost}" placeholder="เช่น 300" oninput="cjSet('extraCost',this.value)"></div>
     </div>
     <div class="sec-title" style="margin:2px 0 6px">รายการใน 1 ชุดเบรค</div>
     <datalist id="${dl}">${cjDataOpts()}</datalist>
