@@ -311,7 +311,7 @@
   <div class="modal" style="max-width:900px">
     <div class="modal-head"><h2>🏪 บันทึกการขาย (หน้าร้าน / สนามแบต)</h2><button class="btn-ghost btn-sm" onclick="closeCourt()">✕ ปิด</button></div>
     <div class="modal-body">
-      <p class="hint" style="margin-top:0">บันทึกการขายหน้าร้าน หรือส่งขายสนามแบต — เลือกช่องทาง+วันที่+เมนู+จำนวน+ราคา ระบบคิดยอดขาย/ต้นทุน/กำไร · กด “ลงรายรับในบัญชี” จะเข้า 📒 บัญชีรับ-จ่าย ตามช่องทางที่เลือก</p>
+      <p class="hint" style="margin-top:0">บันทึกการขายหน้าร้าน หรือส่งขายสนามแบต — เลือกช่องทาง+วันที่+เมนู+จำนวน+ราคา ระบบคิดยอดขาย/ต้นทุน/กำไร · <b>กดบันทึกแล้วลงรายรับเข้า 📒 บัญชีรับ-จ่าย ให้อัตโนมัติ</b> ตามช่องทางที่เลือก (แก้/ลบ รายการ บัญชีอัปเดตตาม ไม่บันทึกซ้ำ)</p>
       <div id="ctForm" style="border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft);margin-bottom:14px"></div>
       <div class="controls" style="margin:12px 0"><span class="lbl">เดือน</span><input id="ctFilterMonth" type="month" onchange="renderCourtList()"><button class="btn-ghost btn-sm" onclick="document.getElementById('ctFilterMonth').value='';renderCourtList();">ดูทั้งหมด</button><span class="lbl">ช่องทาง</span><select id="ctFilterCh" onchange="renderCourtList()"><option value="">ทุกช่องทาง</option><option value="หน้าร้าน">หน้าร้าน</option><option value="สนามแบต">สนามแบต</option></select></div>
       <div id="ctSummary"></div>
@@ -480,6 +480,7 @@ function normMenu(m){
   m.blend=m.blend||{on:false,up:10,extra:0};
   m.appPrices=m.appPrices||{};
   m.batchYield=m.batchYield||'';
+  m.cp=m.cp||{};if(m.cp.labor==null)m.cp.labor=30;if(m.cp.util==null)m.cp.util=10;if(m.cp.fuel==null)m.cp.fuel=10;if(m.cp.matMax==null)m.cp.matMax=35;
   m.packaging=(m.packaging&&m.packaging.length)?m.packaging:[pack('แก้ว'),pack('ฝา'),pack('หลอด'),pack('ถุงพลาสติก')];
   m.packaging.forEach(p=>{if(p.buseQty==null)p.buseQty=num(p.useQty);if(p.catId==null)p.catId='';});
   m.addons=m.addons||[];m.addons.forEach(a=>{a.extraCost=a.extraCost||0;a.up=a.up||0;
@@ -567,6 +568,25 @@ function addonCost(a){return (a.items||[]).reduce((s,it)=>s+addonItemCost(it),0)
 function sepWaterCost(m){const a=(m.addons||[]).find(x=>(x.name||'').includes('แยกน้ำ'));return a?addonCost(a):0;}
 function batchDiv(m){const y=num(m.batchYield);return y>1?y:1;}
 function batchPPText(m){const lv=m.sweetRef||100;const bc=componentsAt(m,lv,false);const d=batchDiv(m);return d>1?'วัตถุดิบ ฿'+fmt(bc)+'/สูตร ÷ '+d+' = ฿'+fmt(bc/d)+'/ชิ้น':'';}
+function updCP(mid,field,val){const m=state.menus.find(x=>x.id===mid);m.cp=m.cp||{};m.cp[field]=val;save();refreshCard(mid);}
+function costBreakdownHTML(m){
+  const cp=m.cp||{},id=m.id,price=num(m.price),goods=refCost(m);
+  const matMax=num(cp.matMax),labor=num(cp.labor),util=num(cp.util),fuel=num(cp.fuel);
+  const matPct=price>0?goods/price*100:0,laborAmt=price*labor/100,utilAmt=price*util/100,fuelAmt=price*fuel/100;
+  const remain=price-goods-laborAmt-utilAmt-fuelAmt,remainPct=price>0?remain/price*100:0,over=price>0&&matPct>matMax+0.001;
+  const pctInp=(f,v)=>`<input type="number" min="0" step="any" value="${v}" oninput="updCP('${id}','${f}',this.value)" style="width:52px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:3px 5px;font-family:inherit">`;
+  return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;margin-top:8px">
+    <div style="font-weight:700;font-size:13px;margin-bottom:6px">📊 สัดส่วนต้นทุน (อิงราคาขาย ฿<span id="cbd-price-${id}">${fmt(price)}</span>/ชิ้น)</div>
+    <table class="pk-table"><thead><tr><th>หมวด</th><th class="num">%</th><th class="num">เป็นเงิน ฿</th><th></th></tr></thead><tbody>
+      <tr><td>ค่าของจริง (วัตถุดิบ+บรรจุ)</td><td class="num" id="cbd-matpct-${id}" style="color:${over?'var(--danger)':'var(--accent)'}">${fmt(matPct)}%</td><td class="num" id="cbd-goods-${id}">฿${fmt(goods)}</td><td>เพดาน ${pctInp('matMax',matMax)}% <span id="cbd-matflag-${id}">${over?'⚠ เกิน!':'✓'}</span></td></tr>
+      <tr><td>ค่าแรง</td><td class="num">${pctInp('labor',labor)}%</td><td class="num" id="cbd-labor-${id}">฿${fmt(laborAmt)}</td><td></td></tr>
+      <tr><td>ค่าน้ำไฟ</td><td class="num">${pctInp('util',util)}%</td><td class="num" id="cbd-util-${id}">฿${fmt(utilAmt)}</td><td></td></tr>
+      <tr><td>ค่าน้ำมัน</td><td class="num">${pctInp('fuel',fuel)}%</td><td class="num" id="cbd-fuel-${id}">฿${fmt(fuelAmt)}</td><td></td></tr>
+      <tr style="border-top:2px solid var(--line)"><td style="font-weight:700">เหลือ (กำไร/อื่นๆ)</td><td class="num" id="cbd-remainpct-${id}" style="font-weight:700">${fmt(remainPct)}%</td><td class="num" id="cbd-remain-${id}" style="font-weight:700;color:${remain>=0?'var(--accent)':'var(--danger)'}">฿${fmt(remain)}</td><td></td></tr>
+    </tbody></table>
+    <p class="hint" style="margin-top:6px">ค่าของจริงควร ≤ เพดาน (ปกติ 35%) ถ้าเกินจะขึ้น ⚠ · ค่าแรง/น้ำไฟ/น้ำมัน คิดเป็น % ของราคาขาย · ที่เหลือ = กำไร</p>
+  </div>`;
+}
 function totalAt(m,lv,bl){return componentsAt(m,lv,bl)/batchDiv(m)+packagingCost(m,bl);}
 function refCost(m){return totalAt(m,m.sweetRef||100,false);}      // วัตถุดิบ+บรรจุภัณฑ์ สูตรปกติ ที่ความหวานอ้างอิง
 function refCostBlend(m){return totalAt(m,m.sweetRef||100,true);}  // สูตรปั่น
@@ -1410,6 +1430,7 @@ function cardHTML(m){
         <div class="row"><label>กำไร/${unit}</label><span class="big ${pf>=0?'profit-pos':'profit-neg'}" id="profit-${m.id}">฿${fmt(pf)} <span style="font-size:12px;font-weight:400">(${fmt(am)}%)</span></span></div>
         ${dineBlend}
       </div>
+      ${dessert?costBreakdownHTML(m):''}
       ${state.platforms.map(p=>platBlock(m,p)).join('')}
     </div>
     <div class="menu-foot">
@@ -1435,6 +1456,8 @@ function refreshCard(id){
   SWEET.forEach(l=>{setTxt('#sw-'+id+'-'+l,'฿'+fmt(totalAt(m,l,false)));setTxt('#swb-'+id+'-'+l,'฿'+fmt(totalAt(m,l,true)));});
   setTxt('#matcost-'+id,'฿'+fmt(refCost(m)));
   const bpp=el.querySelector('#batchpp-'+id);if(bpp)bpp.innerHTML=batchPPText(m);
+  if(m.type==='dessert'){const cp=m.cp||{},price=num(m.price),goods=refCost(m);const matMax=num(cp.matMax),labor=num(cp.labor),util=num(cp.util),fuel=num(cp.fuel);const matPct=price>0?goods/price*100:0,laborAmt=price*labor/100,utilAmt=price*util/100,fuelAmt=price*fuel/100;const remain=price-goods-laborAmt-utilAmt-fuelAmt,remainPct=price>0?remain/price*100:0,over=price>0&&matPct>matMax+0.001;
+    setTxt('#cbd-price-'+id,fmt(price));setTxt('#cbd-goods-'+id,'฿'+fmt(goods));const mp=el.querySelector('#cbd-matpct-'+id);if(mp){mp.textContent=fmt(matPct)+'%';mp.style.color=over?'var(--danger)':'var(--accent)';}setTxt('#cbd-matflag-'+id,over?'⚠ เกิน!':'✓');setTxt('#cbd-labor-'+id,'฿'+fmt(laborAmt));setTxt('#cbd-util-'+id,'฿'+fmt(utilAmt));setTxt('#cbd-fuel-'+id,'฿'+fmt(fuelAmt));setTxt('#cbd-remainpct-'+id,fmt(remainPct)+'%');const rm=el.querySelector('#cbd-remain-'+id);if(rm){rm.textContent='฿'+fmt(remain);rm.style.color=remain>=0?'var(--accent)':'var(--danger)';}}
   setTxt('#ohcost-'+id,'฿'+fmt(overheadTotal()));
   setTxt('#cost-'+id,'฿'+fmt(fullCost(m)));
   setTxt('#sugg-'+id,'฿'+fmt(suggDine(m)));
@@ -1911,10 +1934,13 @@ function ctSetItem(i,field,val){ctDraft.items[i][field]=val;ctUpdatePreview();}
 function ctPickMenu(i,val){const it=ctDraft.items[i];const v=(val||'').trim().toLowerCase();const m=state.menus.find(x=>(x.name||'').trim().toLowerCase()===v);if(m){it.menuId=m.id;it.name=m.name;if(!(num(it.price)>0))it.price=num(m.price);}else{it.menuId='';it.name=(val||'').trim();}renderCourtForm();}
 function ctAddItem(){ctDraft.items.push(ctNewItem());renderCourtForm();}
 function ctDelItem(i){ctDraft.items.splice(i,1);if(!ctDraft.items.length)ctDraft.items.push(ctNewItem());renderCourtForm();}
-function saveCourt(){const c=JSON.parse(JSON.stringify(ctDraft));c.items=(c.items||[]).filter(it=>it.menuId||(it.name||'').trim()||num(it.qty)>0);if(!c.items.length){alert('ใส่อย่างน้อย 1 เมนู');return;}const idx=c.id?state.courtLogs.findIndex(x=>x.id===c.id):-1;if(idx>=0){state.courtLogs[idx]=c;}else{c.id=uid();state.courtLogs.push(c);}save();ctDraft=ctNewDraft();renderCourtForm();renderCourtList();const t=document.getElementById('ctSaved');if(t){t.textContent=idx>=0?'✓ แก้ไขแล้ว':'✓ บันทึกแล้ว';setTimeout(()=>{if(t)t.textContent='';},1500);}}
+function saveCourt(){const c=JSON.parse(JSON.stringify(ctDraft));c.items=(c.items||[]).filter(it=>it.menuId||(it.name||'').trim()||num(it.qty)>0);if(!c.items.length){alert('ใส่อย่างน้อย 1 เมนู');return;}const idx=c.id?state.courtLogs.findIndex(x=>x.id===c.id):-1;if(idx>=0){state.courtLogs[idx]=c;}else{c.id=uid();state.courtLogs.push(c);}
+  const rev=ctRevenue(c),ch=c.channel||'หน้าร้าน';state.ledger=state.ledger||[];const li=state.ledger.find(e=>e.cref===c.id);
+  if(rev>0){const ent={cref:c.id,date:c.date||todayStr(),kind:'in',source:ch,channel:ch,note:ch+(c.note?' '+c.note:''),amount:round2(rev)};if(li){Object.assign(li,ent);}else{ent.id=uid();state.ledger.push(ent);}}else if(li){state.ledger=state.ledger.filter(e=>e.id!==li.id);}
+  save();ctDraft=ctNewDraft();renderCourtForm();renderCourtList();const t=document.getElementById('ctSaved');if(t){t.textContent=idx>=0?'✓ แก้ไข + ลงบัญชีแล้ว':'✓ บันทึก + ลงบัญชีแล้ว';setTimeout(()=>{if(t)t.textContent='';},1800);}}
 function editCourt(id){const c=state.courtLogs.find(x=>x.id===id);if(!c)return;ctDraft=JSON.parse(JSON.stringify(c));renderCourtForm();renderCourtList();const f=document.getElementById('ctForm');if(f)f.scrollIntoView({behavior:'smooth',block:'start'});}
 function cancelCourt(){ctDraft=ctNewDraft();renderCourtForm();}
-function delCourt(id){if(confirm('ลบรายการนี้?')){state.courtLogs=state.courtLogs.filter(x=>x.id!==id);save();renderCourtList();}}
+function delCourt(id){if(confirm('ลบรายการนี้? (จะลบรายรับที่ลงบัญชีไว้ด้วย)')){state.courtLogs=state.courtLogs.filter(x=>x.id!==id);state.ledger=(state.ledger||[]).filter(e=>e.cref!==id);save();renderCourtList();}}
 function ctToLedger(){const c=ctDraft;const rev=ctRevenue(c);if(!(rev>0)){alert('ยังไม่มียอดขาย');return;}const ch=c.channel||'หน้าร้าน';if(!confirm('บันทึกรายรับ ฿'+fmt(rev)+' ('+ch+') เข้าบัญชีรายรับ-รายจ่าย?'))return;state.ledger=state.ledger||[];state.ledger.push({id:uid(),date:c.date||todayStr(),kind:'in',source:ch,channel:ch,note:ch+(c.note?' '+c.note:''),amount:round2(rev)});save();alert('บันทึกรายรับแล้ว ✓ (ดูที่ 📒 บัญชีรับ-จ่าย)');}
 function ctUpdatePreview(){const el=document.getElementById('ctPreview');if(!el)return;const c=ctDraft;el.innerHTML=`ยอดขาย <b>฿${fmt(ctRevenue(c))}</b> · ต้นทุน ฿${fmt(ctCogs(c))} · กำไร <b style="color:${ctProfit(c)>=0?'var(--accent)':'var(--danger)'}">฿${fmt(ctProfit(c))}</b>`;(c.items||[]).forEach((it,i)=>{const e=document.getElementById('ctline-'+i);if(e)e.textContent='฿'+fmt(num(it.price)*num(it.qty));});}
 function renderCourtForm(){
@@ -1940,7 +1966,7 @@ function renderCourtForm(){
     ${rows}
     <button class="btn-ghost btn-sm" onclick="ctAddItem()" style="margin-bottom:10px">＋ เพิ่มเมนู</button>
     <div id="ctPreview" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn-primary btn-sm" onclick="saveCourt()">${editing?'💾 บันทึกการแก้ไข':'＋ บันทึก'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelCourt()">ยกเลิก</button>`:''}<button class="btn-ghost btn-sm" onclick="ctToLedger()">➕ ลงรายรับในบัญชี</button><span id="ctSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn-primary btn-sm" onclick="saveCourt()">${editing?'💾 บันทึกการแก้ไข + ลงบัญชี':'＋ บันทึก + ลงบัญชี'}</button>${editing?`<button class="btn-ghost btn-sm" onclick="cancelCourt()">ยกเลิก</button>`:''}<span id="ctSaved" style="color:var(--accent);font-weight:700;font-size:13px"></span></div>`;
   ctUpdatePreview();
 }
 function ctFiltered(){const fm=document.getElementById('ctFilterMonth').value;const fc=(document.getElementById('ctFilterCh')||{}).value||'';return (state.courtLogs||[]).filter(c=>(!fm||(c.date||'').slice(0,7)===fm)&&(!fc||(c.channel||'สนามแบต')===fc));}
