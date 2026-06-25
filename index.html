@@ -1452,7 +1452,7 @@ function importBackupFile(input){
 
 // ---------- orders log (LINE MAN / Grab) ----------
 let orderDraft=null;
-function orderDraftItem(){return {menuId:'',name:'',qty:1,sweet:100,blend:false,price:0};}
+function orderDraftItem(){return {menuId:'',name:'',qty:1,sweet:100,blend:false,price:0,disc10:false};}
 function platByName(nm){return (state.platforms||[]).find(p=>p.name===nm);}
 function newOrderDraft(){
   const o={platform:(state.platforms[0]&&state.platforms[0].name)||'LINE MAN',date:todayStr(),time:'',code:'',customer:'',items:[orderDraftItem()],discount:0,gp:'',ad:'',ship:'',feeMode:'pct',gpB:'',gpvatB:'',adB:'',shipB:'',payType:'epay'};
@@ -1467,7 +1467,9 @@ function feeLabels(p){
   if(/grab/i.test(p||'')) return {gp:'ค่าคอมมิชชันคำสั่งซื้อ',gpvat:'ค่าคอมมิชชันเพิ่มเติม',ship:'ค่าธรรมเนียมการตลาด',gpPct:'คอมมิชชัน %',shipPct:'ค่าการตลาด %',gpCombo:'ค่าคอมมิชชัน (รวมเพิ่มเติม)',shipDonut:'ค่าธรรมเนียมการตลาด',disc:'ส่วนลดที่ร้านสนับสนุน',netSale:'ยอดขายสุทธิ',netIncome:'รายได้สุทธิ',epay:'ยอดขายสุทธิ'};
   return {gp:'ค่าบริการ GP',gpvat:'VAT ค่าบริการ GP',ship:'ค่าส่วนลดค่าส่ง',gpPct:'GP %',shipPct:'ค่าส่ง %',gpCombo:'ค่า GP (รวม VAT)',shipDonut:'ค่าส่วนลดค่าส่ง',disc:'ส่วนลดร้านออก',netSale:'ยอดขายหลังหักส่วนลด',netIncome:'เงินถึงร้าน',epay:'ยอดขาย E-payment'};
 }
-function orderRevenueNet(o){return orderGross(o)-orderFees(o)-num(o.discount);}
+function orderItemDisc(o){if(!/grab/i.test(o.platform||''))return 0;return (o.items||[]).reduce((s,it)=>s+(it.disc10?num(it.price)*num(it.qty)*0.1:0),0);}
+function orderDiscount(o){return num(o.discount)+orderItemDisc(o);}
+function orderRevenueNet(o){return orderGross(o)-orderFees(o)-orderDiscount(o);}
 function orderItemCogs(it){if(it.menuId){const m=state.menus.find(x=>x.id===it.menuId);if(m)return (it.blend?fullCostBlend(m):fullCost(m))*num(it.qty);}return 0;}
 function orderCogs(o){return (o.items||[]).reduce((s,it)=>s+orderItemCogs(it),0);}
 function orderProfit(o){return orderRevenueNet(o)-orderCogs(o);}
@@ -1514,7 +1516,7 @@ function dailyAdAmt(type){return dailyAdsFiltered().filter(a=>(a.type||'ad')===t
 function dailyExtraTotal(){return dailyAdsFiltered().reduce((s,a)=>s+num(a.amount),0);}
 function platExtra(name){return dailyAdsFiltered().filter(a=>a.platform===name).reduce((s,a)=>s+num(a.amount),0);}
 function tbSplitKey(){return (document.getElementById('odFilterMonth').value||'all')+'|'+(document.getElementById('odFilterPlat').value||'all');}
-function curTbSales(){return ordersFiltered().filter(o=>o.payType==='thaiboon').reduce((s,o)=>s+orderGross(o)-num(o.discount),0);}
+function curTbSales(){return ordersFiltered().filter(o=>o.payType==='thaiboon').reduce((s,o)=>s+orderGross(o)-orderDiscount(o),0);}
 function setTbSplit(which,val){const k=tbSplitKey();state.tbSplit=state.tbSplit||{};const o=state.tbSplit[k]=state.tbSplit[k]||{};const tb=curTbSales();const v=num(val);if(which==='gov'){o.gov=v;o.wallet=Math.max(0,round2(tb-v));}else{o.wallet=v;o.gov=Math.max(0,round2(tb-v));}save();renderOrders();}
 function feeGPamt(o){return o.feeMode==='baht'?(num(o.gpB)+num(o.gpvatB)):orderGross(o)*num(o.gp)/100;}
 function feeShipAmt(o){return o.feeMode==='baht'?num(o.shipB):orderGross(o)*num(o.ship)/100;}
@@ -1559,15 +1561,17 @@ function renderOrderForm(){
   const editing=o.id&&(state.orders||[]).some(x=>x.id===o.id);
   const L=feeLabels(o.platform);
   const platOpts=state.platforms.map(p=>`<option value="${esc(p.name)}" ${p.name===o.platform?'selected':''}>${esc(p.name)}</option>`).join('');
+  const grab=/grab/i.test(o.platform||'');
   const items=o.items.map((it,i)=>{
     const linked=!!it.menuId;
-    return `<div style="display:grid;grid-template-columns:1.6fr ${linked?'':'1.4fr '}auto auto auto auto auto;gap:6px;align-items:end;margin-bottom:6px">
+    return `<div style="display:grid;grid-template-columns:1.6fr ${linked?'':'1.4fr '}auto auto auto auto ${grab?'auto ':''}auto;gap:6px;align-items:end;margin-bottom:6px">
       <div class="fld"><label>เมนู</label><input list="odmdl-${i}" value="${esc(it.name||'')}" placeholder="พิมพ์ค้นหาเมนู / ชื่อเอง" onchange="pickOrderMenu(${i},this.value)" style="border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:13px;width:100%"><datalist id="odmdl-${i}">${menuDataOpts()}</datalist></div>
       ${linked?'':`<div class="fld"><label>ชื่อเมนู (พิมพ์เอง)</label><input value="${esc(it.name)}" oninput="odSetItem(${i},'name',this.value)" placeholder="เช่น ชาไทย"></div>`}
       <div class="fld"><label>จำนวน</label><input type="number" min="0" step="1" style="width:62px;text-align:right" value="${it.qty}" oninput="odSetItem(${i},'qty',this.value)"></div>
       <div class="fld"><label>หวาน</label><select onchange="odSweetChange(${i},this.value)">${[100,50,25,0].map(s=>`<option value="${s}" ${String(it.sweet)===String(s)?'selected':''}>${s}%</option>`).join('')}<option value="" ${it.sweet===''?'selected':''}>-</option></select></div>
       <div class="fld"><label>ปั่น</label><input type="checkbox" ${it.blend?'checked':''} onchange="odBlendChange(${i},this.checked)" style="width:20px;height:20px;margin:6px 0"></div>
       <div class="fld"><label>ราคา/แก้ว ฿</label><input type="number" min="0" step="any" style="width:80px;text-align:right" value="${it.price}" oninput="odSetItem(${i},'price',this.value)"></div>
+      ${grab?`<div class="fld"><label title="ส่วนลด 10% ร้านสนับสนุน">ลด 10%</label><input type="checkbox" ${it.disc10?'checked':''} onchange="odSetItem(${i},'disc10',this.checked)" style="width:20px;height:20px;margin:6px 0"></div>`:''}
       <button class="btn-danger btn-sm" onclick="odDelItem(${i})" title="ลบแถว">✕</button>
     </div>`;
   }).join('');
@@ -1609,7 +1613,8 @@ function renderOrderForm(){
 function updateOdPreview(){
   const el=document.getElementById('odPreview');if(!el)return;const o=orderDraft;
   const g=orderGross(o),f=orderFees(o),net=orderRevenueNet(o),cogs=orderCogs(o),pf=orderProfit(o);
-  el.innerHTML=`ยอดเต็ม <b>฿${fmt(g)}</b> · ส่วนลด −฿${fmt(num(o.discount))} · ยอดหลังหักส่วนลด <b>฿${fmt(g-num(o.discount))}</b> · หักค่าธรรมเนียม −฿${fmt(f)} · เงินถึงร้าน <b style="color:var(--plat)">฿${fmt(net)}</b> · ต้นทุน ฿${fmt(cogs)} · กำไรสุทธิ <b style="color:${pf>=0?'var(--accent)':'var(--danger)'}">฿${fmt(pf)}</b>`;
+  const dsc=orderDiscount(o);
+  el.innerHTML=`ยอดเต็ม <b>฿${fmt(g)}</b> · ส่วนลด −฿${fmt(dsc)} · ยอดหลังหักส่วนลด <b>฿${fmt(g-dsc)}</b> · หักค่าธรรมเนียม −฿${fmt(f)} · เงินถึงร้าน <b style="color:var(--plat)">฿${fmt(net)}</b> · ต้นทุน ฿${fmt(cogs)} · กำไรสุทธิ <b style="color:${pf>=0?'var(--accent)':'var(--danger)'}">฿${fmt(pf)}</b>`;
 }
 // ---- list/summary ----
 function ordersFiltered(){
@@ -1622,7 +1627,7 @@ function renderOrders(){
   const sum=f=>list.reduce((s,o)=>s+f(o),0);
   const adT=dailyAdAmt('ad'),wdT=dailyAdAmt('withdraw'),extraT=adT+wdT;
   const LF=feeLabels(document.getElementById('odFilterPlat').value);
-  const gross=sum(orderGross),disc=sum(o=>num(o.discount)),fees=sum(orderFees)+extraT,net=sum(orderRevenueNet)-extraT,cogs=sum(orderCogs),profit=sum(orderProfit)-extraT,cups=sum(orderQty);
+  const gross=sum(orderGross),disc=sum(orderDiscount),fees=sum(orderFees)+extraT,net=sum(orderRevenueNet)-extraT,cogs=sum(orderCogs),profit=sum(orderProfit)-extraT,cups=sum(orderQty);
   document.getElementById('odSummary').innerHTML=`
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
       <div class="stat"><div class="label">ออเดอร์ / แก้ว</div><div class="value">${list.length} / ${cups}</div></div>
@@ -1640,8 +1645,8 @@ function renderOrders(){
   const chEl=document.getElementById('odChart');
   if(chEl){
     if(gross>0||expTotal>0){
-      const epaySales=list.filter(o=>o.payType!=='thaiboon').reduce((s,o)=>s+orderGross(o)-num(o.discount),0);
-      const tbSales=list.filter(o=>o.payType==='thaiboon').reduce((s,o)=>s+orderGross(o)-num(o.discount),0);
+      const epaySales=list.filter(o=>o.payType!=='thaiboon').reduce((s,o)=>s+orderGross(o)-orderDiscount(o),0);
+      const tbSales=list.filter(o=>o.payType==='thaiboon').reduce((s,o)=>s+orderGross(o)-orderDiscount(o),0);
       const ov=(state.tbSplit||{})[tbSplitKey()]||{};
       let tbGov=tbSales*0.6,tbWallet=tbSales*0.4;
       if(num(ov.gov)>0||num(ov.wallet)>0){tbGov=num(ov.gov);tbWallet=num(ov.wallet);}
@@ -1677,7 +1682,7 @@ function renderOrders(){
       <td style="min-width:160px">${orderItemsLabel(o)}</td>
       <td class="num">${orderQty(o)}</td>
       <td class="num" style="white-space:nowrap">฿${fmt(orderGross(o))}</td>
-      <td class="num" style="white-space:nowrap;color:var(--danger)">${num(o.discount)>0?'−฿'+fmt(num(o.discount)):'-'}</td>
+      <td class="num" style="white-space:nowrap;color:var(--danger)">${orderDiscount(o)>0?'−฿'+fmt(orderDiscount(o)):'-'}</td>
       <td class="num" style="white-space:nowrap;color:var(--danger)">−฿${fmt(orderFees(o))}</td>
       <td class="num" style="white-space:nowrap;font-weight:700;color:var(--plat)">฿${fmt(orderRevenueNet(o))}</td>
       <td class="num" style="white-space:nowrap">฿${fmt(orderCogs(o))}</td>
@@ -1690,10 +1695,10 @@ function exportOrdersCSV(){
   const list=ordersFiltered().slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   if(!list.length){alert('ไม่มีออเดอร์ให้ส่งออก');return;}
   const rows=[['วันที่','เวลา','แพลตฟอร์ม','รหัส','ลูกค้า','เมนู','แก้ว','ยอดเต็ม','ส่วนลด','ค่าธรรมเนียม(GP/ค่าส่ง)','เงินถึงร้าน','ต้นทุน','กำไรสุทธิ']];
-  list.forEach(o=>rows.push([o.date,o.time,o.platform,o.code,o.customer,orderItemsLabel(o).replace(/×/g,'x'),orderQty(o),round2(orderGross(o)),round2(num(o.discount)),round2(orderFees(o)),round2(orderRevenueNet(o)),round2(orderCogs(o)),round2(orderProfit(o))]));
+  list.forEach(o=>rows.push([o.date,o.time,o.platform,o.code,o.customer,orderItemsLabel(o).replace(/×/g,'x'),orderQty(o),round2(orderGross(o)),round2(orderDiscount(o)),round2(orderFees(o)),round2(orderRevenueNet(o)),round2(orderCogs(o)),round2(orderProfit(o))]));
   const sum=f=>list.reduce((s,o)=>s+f(o),0);
   const extraT=dailyExtraTotal();
-  rows.push([]);rows.push(['รวม','','','','','',sum(orderQty),round2(sum(orderGross)),round2(sum(o=>num(o.discount))),round2(sum(orderFees)),round2(sum(orderRevenueNet)),round2(sum(orderCogs)),round2(sum(orderProfit))]);
+  rows.push([]);rows.push(['รวม','','','','','',sum(orderQty),round2(sum(orderGross)),round2(sum(orderDiscount)),round2(sum(orderFees)),round2(sum(orderRevenueNet)),round2(sum(orderCogs)),round2(sum(orderProfit))]);
   const ads=dailyAdsFiltered().slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   if(ads.length){rows.push([]);rows.push(['ค่าใช้จ่ายเพิ่มเติม (โฆษณา/ค่าธรรมเนียมการถอน)']);rows.push(['วันที่','แพลตฟอร์ม','ประเภท','จำนวน']);ads.forEach(a=>rows.push([a.date,a.platform,(a.type==='withdraw'?'ค่าธรรมเนียมการถอน':'ค่าโฆษณา'),round2(num(a.amount))]));rows.push(['รวม','','',round2(extraT)]);}
   rows.push([]);rows.push(['กำไรสุทธิหลังหักค่าใช้จ่ายเพิ่มเติม','','','','','','','','','','','',round2(sum(orderProfit)-extraT)]);
