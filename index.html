@@ -990,16 +990,31 @@ function rowsToLedger(rows,opts){
   // โหมดกรองหมวด: สแกนหาเซลล์ที่ตรงกับหมวด (เช่น Muan) ทั่วทั้งชีต รองรับแดชบอร์ดหลายตาราง (วันที่|หมวด|จำนวนเงิน|รายละเอียด)
   if(wantCat){
     const out=[],seen=new Set();
+    // โหมด "อ่านจากคอลัมน์": หาคอลัมน์หัวตาราง รายรับ / ค่าใช้จ่าย / การเก็บออม เพื่อแยกประเภทตามตำแหน่ง
+    let incCol=-1,expCol=-1,savCol=-1;
+    const scanN=Math.min(rows.length,10);
+    for(let r=0;r<scanN;r++){const c=rows[r]||[];for(let i=0;i<c.length;i++){const v=String(c[i]==null?'':c[i]).trim();
+      if(incCol<0&&v==='รายรับ')incCol=i;
+      if(expCol<0&&(v==='ค่าใช้จ่าย'||v==='รายจ่าย'))expCol=i;
+      if(savCol<0&&/การเก็บออม|ลงทุน/.test(v))savCol=i;}}
+    const classify=(i)=>{
+      if(forceKind!=='auto')return forceKind;
+      if(expCol>=0&&i>=expCol&&(savCol<0||i<savCol))return 'out';
+      if(incCol>=0&&i>=incCol&&(expCol<0||i<expCol))return 'in';
+      return 'out';
+    };
     for(const c of rows){
       if(!c)continue;
       for(let i=0;i<c.length;i++){
         if(String(c[i]==null?'':c[i]).trim().toLowerCase()!==wantCat)continue;
+        if(forceKind==='auto'&&savCol>=0&&i>=savCol)continue; // ข้ามบล็อกเก็บออม/ลงทุน
         const amount=money(c[i+1]);if(!(amount>0))continue;
         const date=normDate(c[i-1]||'');
         const note=String(c[i+2]==null?'':c[i+2]).trim();
         const unit=money(c[i+4]); // ราคาต่อชิ้น (ตำแหน่งในตารางค่าใช้จ่าย)
-        const key=date+'|'+amount+'|'+note;if(seen.has(key))continue;seen.add(key);
-        out.push({id:uid(),date:date||todayStr(),kind:forceKind==='auto'?'out':forceKind,source:'ร้าน',channel:catLabel,note:note||catLabel,amount,unit:unit>0?unit:0,fromSheet:true});
+        const kind=classify(i);
+        const key=kind+'|'+date+'|'+amount+'|'+note;if(seen.has(key))continue;seen.add(key);
+        out.push({id:uid(),date:date||todayStr(),kind,source:'ร้าน',channel:catLabel,note:note||catLabel,amount,unit:unit>0?unit:0,fromSheet:true});
       }
     }
     return out;
