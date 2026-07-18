@@ -180,11 +180,12 @@
     <button class="btn-ghost" onclick="setShopName()">✎ ชื่อร้าน</button>
     <button class="btn-danger" onclick="clearAll()">🗑 ล้างทั้งหมด</button>
   </div>
-  <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap">
+  <div style="display:flex;gap:6px;margin:8px 0 6px;flex-wrap:wrap">
     <button class="btn-ghost btn-sm" id="mtab-all" onclick="setMenuType('all')">ทั้งหมด</button>
     <button class="btn-ghost btn-sm" id="mtab-drink" onclick="setMenuType('drink')">🥤 เครื่องดื่ม</button>
     <button class="btn-ghost btn-sm" id="mtab-dessert" onclick="setMenuType('dessert')">🍪 ขนม</button>
   </div>
+  <div id="sizeTabs" style="display:flex;gap:6px;margin:0 0 8px;flex-wrap:wrap;align-items:center"></div>
   <div class="controls">
     <input id="searchBox" placeholder="🔍 ค้นหาชื่อเมนู" oninput="setSearch(this.value)">
     <span class="lbl">เรียงโดย</span>
@@ -334,7 +335,9 @@
           <option value="all">วัตถุดิบ + บรรจุภัณฑ์</option>
         </select>
         <button class="btn-ghost btn-sm" onclick="exportSweetCSV()">⬇ ส่งออก CSV</button>
-        <input id="sweetSearch" placeholder="🔍 ค้นหาชื่อเมนู" oninput="renderSweetTable()" style="flex:1;min-width:160px;padding:6px 10px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:13px">
+        <label style="font-size:13px;color:var(--muted)">ไซส์:</label>
+        <select id="sweetSizeFilter" onchange="renderSweetTable()" style="padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:13px"><option value="">ทุกไซส์</option></select>
+        <input id="sweetSearch" placeholder="🔍 ค้นหาชื่อเมนู" oninput="renderSweetTable()" style="flex:1;min-width:140px;padding:6px 10px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:13px">
       </div>
       <div id="sweetTableBox"></div>
     </div>
@@ -1480,15 +1483,35 @@ function refreshCard(id){
   const tmp=document.createElement('div');tmp.innerHTML=cardHTML(m);
   if(el.querySelector('.photo').innerHTML!==tmp.querySelector('.photo').innerHTML)el.querySelector('.photo').replaceWith(tmp.querySelector('.photo'));
 }
-let openMenuId=null, searchQ='', sortBy='name', menuTypeFilter='all';
+let openMenuId=null, searchQ='', sortBy='name', menuTypeFilter='all', menuSizeFilter='all';
 function setSearch(v){searchQ=v;render();}
 function setSort(v){sortBy=v;render();}
 function setMenuType(v){menuTypeFilter=v;render();}
-function updateMenuTabs(){['all','drink','dessert'].forEach(t=>{const b=document.getElementById('mtab-'+t);if(!b)return;const on=menuTypeFilter===t;b.style.background=on?'var(--brand)':'';b.style.color=on?'#fff':'';b.style.borderColor=on?'var(--brand)':'';});}
+function setMenuSize(v){menuSizeFilter=v;render();}
+function menuSize(m){const mm=(m.name||'').match(/(\d+)\s*oz/i);return mm?mm[0].replace(/\s+/g,'').toLowerCase():'';}
+function menuSizes(){return [...new Set(state.menus.map(m=>menuSize(m)).filter(Boolean))].sort();}
+function updateMenuTabs(){['all','drink','dessert'].forEach(t=>{const b=document.getElementById('mtab-'+t);if(!b)return;const on=menuTypeFilter===t;b.style.background=on?'var(--brand)':'';b.style.color=on?'#fff':'';b.style.borderColor=on?'var(--brand)':'';});renderSizeTabs();}
+function renderSizeTabs(){const el=document.getElementById('sizeTabs');if(!el)return;const sizes=menuSizes();const on=s=>menuSizeFilter===s?'style="background:var(--brand);color:#fff;border-color:var(--brand)"':'';let h=`<span style="font-size:12px;color:var(--muted)">ไซส์:</span><button class="btn-ghost btn-sm" onclick="setMenuSize('all')" ${on('all')}>ทั้งหมด</button>`;sizes.forEach(s=>{h+=`<button class="btn-ghost btn-sm" onclick="setMenuSize('${s}')" ${on(s)}>${esc(s)}</button>`;});h+=`<button class="btn-ghost btn-sm" style="margin-left:auto;color:var(--base);border-color:#cfe0ef" onclick="makeAll14oz()">📐 สร้าง 14oz จาก 16oz</button>`;el.innerHTML=h;}
+function makeAll14oz(){
+  const f=0.875,r2=v=>Math.round(num(v)*f*100)/100;
+  const src=state.menus.filter(m=>/16\s*oz/i.test(m.name||''));
+  if(!src.length){alert('ไม่พบเมนูขนาด 16oz (เมนูต้องมีคำว่า 16oz ในชื่อ)');return;}
+  if(!confirm('สร้างเมนู 14oz จากเมนู 16oz ทั้งหมด (ปริมาณ ×0.875)?\nเมนู 14oz ที่มีชื่อซ้ำอยู่แล้วจะข้ามไป'))return;
+  let created=0;
+  src.forEach(m=>{const newName=(m.name||'').replace(/16\s*oz/i,'14oz').trim();
+    if(state.menus.some(x=>(x.name||'').trim().toLowerCase()===newName.toLowerCase()))return;
+    const c=JSON.parse(JSON.stringify(m));c.id=uid();c.name=newName;
+    (c.components||[]).forEach(x=>{x.id=uid();x.qty=r2(x.qty);if(x.qtys)SWEET.forEach(l=>x.qtys[l]=r2(x.qtys[l]));x.bqty=r2(x.bqty);if(x.bqtys)SWEET.forEach(l=>x.bqtys[l]=r2(x.bqtys[l]));if(x.kind==='variant'){const map={};(x.options||[]).forEach(o=>{const nid=uid();map[o.id]=nid;o.id=nid;});if(x.sel&&map[x.sel])x.sel=map[x.sel];}});
+    (c.packaging||[]).forEach(x=>x.id=uid());(c.addons||[]).forEach(a=>{a.id=uid();(a.items||[]).forEach(it=>it.id=uid());});
+    c.appPrices={};state.menus.push(c);created++;});
+  if(!created){alert('เมนู 14oz มีครบแล้ว ไม่มีอะไรต้องสร้าง');return;}
+  save();render();alert('สร้างเมนู 14oz แล้ว '+created+' เมนู (ปริมาณ ×0.875)\nอย่าลืมแก้ราคาแก้ว 14oz ในบรรจุภัณฑ์ และตั้งราคาขายใหม่ของแต่ละเมนู');
+}
 function visibleMenus(){
   let arr=state.menus.slice();
   if(menuTypeFilter==='drink')arr=arr.filter(m=>m.type!=='dessert');
   else if(menuTypeFilter==='dessert')arr=arr.filter(m=>m.type==='dessert');
+  if(menuSizeFilter&&menuSizeFilter!=='all')arr=arr.filter(m=>menuSize(m)===menuSizeFilter);
   const q=searchQ.trim().toLowerCase();
   if(q)arr=arr.filter(m=>(m.name||'').toLowerCase().includes(q));
   if(sortBy==='name')arr.sort((a,b)=>(a.name||'').localeCompare(b.name||'','th'));
@@ -1989,7 +2012,7 @@ function renderCourtList(){
   </tr>`;}).join('')}</tbody></table>`:'<p class="hint">ยังไม่มีรายการในช่วงที่เลือก</p>';
 }
 // ---------- sweetness recipe table (ตารางสูตรเทียบความหวาน) ----------
-function openSweetTable(){renderSweetTable();document.getElementById('sweetOverlay').classList.add('open');}
+function openSweetTable(){const sf=document.getElementById('sweetSizeFilter');if(sf){const cur=sf.value;sf.innerHTML='<option value="">ทุกไซส์</option>'+menuSizes().map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');sf.value=cur;}renderSweetTable();document.getElementById('sweetOverlay').classList.add('open');}
 function closeSweetTable(){document.getElementById('sweetOverlay').classList.remove('open');}
 const qfmt=n=>{const r=round2(num(n));return String(r);};
 function updSweetCell(mid,cid,lv,bl,val,rerender){
@@ -2012,7 +2035,9 @@ function updSweetPack(mid,pid,bl,val,rerender){
 }
 function renderSweetTable(){
   const sq=((document.getElementById('sweetSearch')||{}).value||'').trim().toLowerCase();
+  const szf=((document.getElementById('sweetSizeFilter')||{}).value||'');
   let drinks=(state.menus||[]).filter(m=>m.type!=='dessert');
+  if(szf)drinks=drinks.filter(m=>menuSize(m)===szf);
   if(sq)drinks=drinks.filter(m=>(m.name||'').toLowerCase().includes(sq));
   const box=document.getElementById('sweetTableBox');
   if(!drinks.length){box.innerHTML='<p class="hint">'+(sq?'ไม่พบเมนูที่ตรงกับ “'+esc(sq)+'”':'ยังไม่มีเมนูเครื่องดื่ม')+'</p>';return;}
