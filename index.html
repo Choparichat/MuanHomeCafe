@@ -1533,6 +1533,7 @@ function tileHTML(m){
     <div class="tphoto">${photo}</div>
     <div class="tname">${esc(m.name)||'<span style="color:var(--muted)">(ยังไม่ตั้งชื่อ)</span>'}</div>
     <div class="tinfo">${head}${plats}</div>
+    <button class="btn-ghost btn-sm" style="width:100%;margin-top:8px;font-size:12px" onclick="event.stopPropagation();makeSize('${m.id}')">📐 สร้างไซส์ใหม่ (เช่น 14oz)</button>
   </div>`;
 }
 function render(){refreshSummary();updateCampBtn();updateMenuTabs();const g=document.getElementById('grid');
