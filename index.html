@@ -334,6 +334,7 @@
           <option value="all">วัตถุดิบ + บรรจุภัณฑ์</option>
         </select>
         <button class="btn-ghost btn-sm" onclick="exportSweetCSV()">⬇ ส่งออก CSV</button>
+        <input id="sweetSearch" placeholder="🔍 ค้นหาชื่อเมนู" oninput="renderSweetTable()" style="flex:1;min-width:160px;padding:6px 10px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:13px">
       </div>
       <div id="sweetTableBox"></div>
     </div>
@@ -2010,9 +2011,11 @@ function updSweetPack(mid,pid,bl,val,rerender){
   if(rerender)renderSweetTable();
 }
 function renderSweetTable(){
-  const drinks=(state.menus||[]).filter(m=>m.type!=='dessert');
+  const sq=((document.getElementById('sweetSearch')||{}).value||'').trim().toLowerCase();
+  let drinks=(state.menus||[]).filter(m=>m.type!=='dessert');
+  if(sq)drinks=drinks.filter(m=>(m.name||'').toLowerCase().includes(sq));
   const box=document.getElementById('sweetTableBox');
-  if(!drinks.length){box.innerHTML='<p class="hint">ยังไม่มีเมนูเครื่องดื่ม</p>';return;}
+  if(!drinks.length){box.innerHTML='<p class="hint">'+(sq?'ไม่พบเมนูที่ตรงกับ “'+esc(sq)+'”':'ยังไม่มีเมนูเครื่องดื่ม')+'</p>';return;}
   const lvls=[100,50,25,0];
   const sv=document.getElementById('sweetView');const showPack=sv&&sv.value==='all';
   const css=`<style>#sweetTableBox table.swt{border-collapse:collapse;white-space:nowrap;min-width:460px}#sweetTableBox table.swt th,#sweetTableBox table.swt td{border:1px solid var(--line);padding:4px 9px;font-size:13px}#sweetTableBox table.swt th{font-size:12px;font-weight:700}#sweetTableBox table.swt td.nm{text-align:left;color:var(--ink)}#sweetTableBox table.swt td.num{text-align:right}</style>`;
