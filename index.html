@@ -263,6 +263,7 @@
         <button class="btn-ghost btn-sm" onclick="document.getElementById('lgFilterMonth').value='';renderLedger();">ดูทั้งหมด</button>
         <span class="lbl">แหล่ง</span><select id="lgFilterSource" onchange="renderLedger()"></select>
         <span class="lbl">ช่องทาง</span><select id="lgFilterChannel" onchange="renderLedger()"></select>
+        <span class="lbl">ประเภท</span><select id="lgFilterKind" onchange="renderLedger()"><option value="">ทั้งหมด (รับ+จ่าย)</option><option value="in">เฉพาะรายรับ</option><option value="out">เฉพาะรายจ่าย</option></select>
         <button class="btn-ghost btn-sm" onclick="exportLedgerCSV()">⬇ ส่งออก CSV</button>
         <button class="btn-base btn-sm" onclick="importToCatalogs()">🧲 ดึงเข้าคลัง (วัตถุดิบ/บรรจุภัณฑ์/อื่นๆ)</button>
       </div>
@@ -1105,9 +1106,11 @@ function renderLedger(){
     <div class="hint" style="margin-top:8px">คงเหลือแยกแหล่ง: 🏪 ร้าน ฿${fmt(srcNet('ร้าน'))} · 🏸 สนามแบต ฿${fmt(srcNet('สนามแบต'))}</div>
     <div class="hint">รายจ่ายแยกกลุ่ม: 🧂 วัตถุดิบ ฿${fmt(grp('วัตถุดิบ'))} · 📦 บรรจุภัณฑ์ ฿${fmt(grp('บรรจุภัณฑ์'))} · อื่นๆ ฿${fmt(grp('อื่นๆ'))}</div>
     <div class="hint">รายรับแยกช่องทาง: หน้าร้าน ฿${fmt(byCh('หน้าร้าน'))} · Grab ฿${fmt(byCh('Grab'))} · LINE MAN ฿${fmt(byCh('LINE MAN'))}</div>`;
-  document.getElementById('lgTable').innerHTML = list.length? `
+  const fkind=(document.getElementById('lgFilterKind')||{}).value||'';
+  const tlist=fkind?list.filter(e=>e.kind===fkind):list;
+  document.getElementById('lgTable').innerHTML = tlist.length? `
     <table class="pk-table"><thead><tr><th>วันที่</th><th>แหล่ง</th><th>กลุ่ม</th><th>ช่องทาง/หมวด</th><th>โน้ต</th><th class="num">จำนวน</th><th></th></tr></thead>
-    <tbody>${list.map(e=>`<tr>
+    <tbody>${tlist.map(e=>`<tr>
       <td style="white-space:nowrap">${esc(e.date)}</td>
       <td>${esc(e.source||'ร้าน')}</td>
       <td>${e.kind==='out'?`<select data-k="${esc(e.note||'')}" onchange="setItemGroup(this.dataset.k,this.value)" style="font-size:11px;border:1px solid var(--line);border-radius:6px;padding:3px 4px;font-family:inherit">${['วัตถุดิบ','บรรจุภัณฑ์','อื่นๆ'].map(g=>`<option ${classifyItem(e)===g?'selected':''}>${g}</option>`).join('')}</select>`:'-'}</td>
