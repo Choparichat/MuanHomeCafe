@@ -168,6 +168,8 @@
     <button class="btn-plat" onclick="openPlat()">⚙ ตั้งค่าแพลตฟอร์ม (GP)</button>
     <button class="btn-ghost" id="campBtn" onclick="toggleCampaign()">🎯 แคมเปญ</button>
     <button class="btn-ghost" onclick="openLedger()">📒 บัญชีรับ-จ่าย</button>
+    <button class="btn-ghost" onclick="document.getElementById('mbFile').click()">📥 นำเข้าจากสมุดรายรับ-รายจ่าย</button>
+    <input id="mbFile" type="file" accept=".json,application/json" style="display:none" onchange="mbImportFile(this)">
     <button class="btn-ghost" onclick="openOrders()">🧾 บันทึกออเดอร์ LM/Grab</button>
     <button class="btn-ghost" onclick="openCatering()">🍱 จ๊อบเบรค/จัดเลี้ยง</button>
     <button class="btn-ghost" onclick="openCourt()">🏪 ขายหน้าร้าน/สนามแบต</button>
@@ -364,6 +366,28 @@
       <button class="btn-ghost btn-sm" onclick="sortIngCat()">🔤 เรียง ก-ฮ</button>
       <button class="btn-ghost btn-sm" onclick="dedupeIngCat()">🧹 รวมรายการซ้ำ</button>
       <button class="btn-ghost btn-sm" onclick="syncCatalogsToLedger()">🔄 ซิงก์ตามหมวดล่าสุด</button>
+      <button class="btn-base btn-sm" onclick="document.getElementById('mbFile').click()">📥 นำเข้าจากสมุดรายรับ-รายจ่าย</button>
+    </div>
+  </div>
+</div>
+
+<!-- Money-book import modal -->
+<div class="overlay" id="mbOverlay">
+  <div class="modal" style="max-width:980px">
+    <div class="modal-head"><h2>📥 นำเข้าจากสมุดรายรับ-รายจ่าย</h2><button class="btn-ghost btn-sm" onclick="closeMb()">✕ ปิด</button></div>
+    <div class="modal-body">
+      <p class="hint" style="margin-top:0">ใช้ราคาที่ซื้อครั้งล่าสุดของแต่ละรายการ · ราคาแพ็ก = ราคาต่อ 1 ชิ้นที่ซื้อ · ปริมาณแพ็ก = ขนาดบรรจุ (kg/l แปลงเป็น g/ml ให้) · ติ๊กเฉพาะรายการที่จะอัปเดต แล้วกด “บันทึกเข้าคลัง” · เลือก “จับคู่กับ” ได้ถ้าชื่อในคลังไม่ตรงกับในสมุด แอปจะจำไว้ใช้ครั้งต่อไป</p>
+      <div class="controls" style="margin:8px 0">
+        <span class="lbl">แสดง</span>
+        <select id="mbFilter" onchange="renderMb()"><option value="todo">เฉพาะที่ราคาเปลี่ยน/ยังไม่มีในคลัง</option><option value="all">ทั้งหมด</option></select>
+        <button class="btn-ghost btn-sm" onclick="mbCheckAll(true)">ติ๊กทั้งหมดที่แสดง</button>
+        <button class="btn-ghost btn-sm" onclick="mbCheckAll(false)">เอาติ๊กออก</button>
+      </div>
+      <div id="mbInfo" class="hint"></div>
+      <div id="mbTable" style="margin-top:8px;overflow-x:auto"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn-primary" onclick="applyMb()">✓ บันทึกเข้าคลัง</button><span class="hint" id="mbCount"></span>
+      </div>
     </div>
   </div>
 </div>
@@ -1163,6 +1187,89 @@ function exportLedgerCSV(){
   const csv='﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='บัญชีรับจ่าย_'+todayStr()+'.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
+// ---------- import from สมุดรายรับ-รายจ่าย (money-book) ----------
+// The money-book app exports Muan purchases (item, amount, count, package size) as JSON. For each item the newest
+// purchase sets the catalog price: pkgPrice = price of one package bought, pkgQty = its size in g/ml/ชิ้น.
+const MB_SIZE={ml:['ml',1],l:['ml',1000],g:['g',1],kg:['g',1000],'ชิ้น':['ชิ้น',1],'ฟอง':['ฟอง',1]};
+const MB_GROUP={'ค่าวัตถุดิบ':'วัตถุดิบ','ค่าบรรจุภัณฑ์':'บรรจุภัณฑ์','ค่าอุปกรณ์':'อื่นๆ'};
+const MB_KEY={'วัตถุดิบ':'ing','บรรจุภัณฑ์':'pack','อื่นๆ':'other'};
+let mbRows=[];
+const mbNorm=s=>String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+function mbPack(e){
+  const amount=num(e.amount),qty=num(e.qty),z=MB_SIZE[e.sizeUnit],size=num(e.size);
+  if(!(size>0)||!z){const n=qty>0?qty:1;return {pkgPrice:round2(num(e.unitPrice)||amount/n),pkgQty:null,base:''};}
+  // bought by the size's own unit (10 ฟอง × 4.70): the count bought is the package
+  if(e.unit&&e.unit===e.sizeUnit&&qty>0)return {pkgPrice:round2(amount),pkgQty:round2(qty*z[1]),base:z[0]};
+  const n=qty>0?qty:1;return {pkgPrice:round2(amount/n),pkgQty:round2(size*z[1]),base:z[0]};
+}
+function mbFind(item,group){
+  const link=(state.mbLinks||{})[item];
+  if(link){const c=catArr(link.key).find(x=>x.id===link.id);if(c)return {key:link.key,c};}
+  const low=mbNorm(item);
+  const order=[MB_KEY[group],...['ing','pack','other'].filter(k=>k!==MB_KEY[group])];
+  for(const k of order){const c=catArr(k).find(x=>mbNorm(x.name)===low);if(c)return {key:k,c};}
+  return null;
+}
+function mbImportFile(input){
+  const f=input.files[0];if(!f)return;const r=new FileReader();
+  r.onload=ev=>{input.value='';let d;
+    try{d=JSON.parse(ev.target.result);}catch(_){alert('อ่านไฟล์ไม่ได้ ใช้ไฟล์ที่ได้จากปุ่ม “ส่งออกวัตถุดิบ Muan” ในสมุดรายรับ-รายจ่าย');return;}
+    if(!d||d.type!=='muan-purchases'||!Array.isArray(d.items)){alert('ไฟล์นี้ไม่ใช่ไฟล์วัตถุดิบจากสมุดรายรับ-รายจ่าย (ถ้าเป็นไฟล์สำรองของแอปนี้ ให้ใช้ปุ่ม 📂 กู้คืน)');return;}
+    openMb(d);};
+  r.readAsText(f);
+}
+function openMb(d){
+  state.ingCatalog=state.ingCatalog||[];state.packCatalog=state.packCatalog||[];state.otherCatalog=state.otherCatalog||[];
+  const last={};
+  d.items.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).forEach(e=>{const n=String(e.item||'').trim();if(n&&num(e.amount)>0)last[n]=Object.assign({},e,{count:((last[n]||{}).count||0)+1});});
+  mbRows=Object.keys(last).sort((a,b)=>a.localeCompare(b,'th')).map(item=>{
+    const e=last[item],group=MB_GROUP[e.cat]||keywordGroup(item),p=mbPack(e),hit=mbFind(item,group);
+    const row={item,e,p,key:hit?hit.key:MB_KEY[group],target:hit?hit.c.id:'new'};
+    row.changed=mbChanged(row);row.on=row.changed;return row;});
+  document.getElementById('mbInfo').innerHTML=`ไฟล์ส่งออกเมื่อ ${esc(String(d.exportedAt||'').slice(0,10))} · ${d.items.length} ครั้งที่ซื้อ · ${mbRows.length} รายการ`;
+  renderMb();document.getElementById('mbOverlay').classList.add('open');
+}
+function closeMb(){document.getElementById('mbOverlay').classList.remove('open');}
+function mbTarget(r){return r.target==='new'?null:catArr(r.key).find(x=>x.id===r.target)||null;}
+function mbPer(c){const pq=num(c.pkgQty);return pq>0?num(c.pkgPrice)/pq:0;}
+function mbChanged(r){const c=mbTarget(r);if(!c)return true;return round2(num(c.pkgPrice))!==r.p.pkgPrice||(r.p.pkgQty!=null&&round2(num(c.pkgQty))!==r.p.pkgQty);}
+function mbSet(i,field,val){const r=mbRows[i];
+  if(field==='key'){r.key=val;const hit=catArr(val).find(x=>mbNorm(x.name)===mbNorm(r.item));r.target=hit?hit.id:'new';}
+  else if(field==='target')r.target=val;else r.on=val;
+  if(field!=='on'){r.changed=mbChanged(r);r.on=r.changed;}
+  renderMb();}
+function mbCheckAll(v){mbVisible().forEach(i=>{mbRows[i].on=v;});renderMb();}
+function mbVisible(){const all=document.getElementById('mbFilter').value==='all';return mbRows.map((r,i)=>i).filter(i=>all||mbRows[i].changed);}
+function renderMb(){
+  const vis=mbVisible(),unitOf={ing:'หน่วย',pack:'ชิ้น',other:'หน่วย'};
+  document.getElementById('mbTable').innerHTML=vis.length?`<table class="pk-table"><thead><tr><th></th><th>รายการในสมุด</th><th>ซื้อล่าสุด</th><th>เข้าคลัง</th><th>จับคู่กับ</th><th class="num">ในคลังตอนนี้</th><th class="num">ราคาใหม่</th></tr></thead><tbody>${vis.map(i=>{const r=mbRows[i],e=r.e,c=mbTarget(r);
+    const opts=catArr(r.key).slice().sort(byName).map(x=>`<option value="${x.id}" ${x.id===r.target?'selected':''}>${esc(x.name)}</option>`).join('');
+    const bought=`${esc(e.date)} · ฿${fmt(num(e.amount))}${num(e.qty)?` / ${esc(e.qty)} ${esc(e.unit||'')}`:''}${e.size?` · ขนาด ${esc(e.size)} ${esc(e.sizeUnit)}`:''}${e.shop?` · ${esc(e.shop)}`:''}`;
+    const now=c?`฿${fmt(num(c.pkgPrice))} / ${esc(c.pkgQty)}<div class="hint">฿${fmt(mbPer(c))}/${unitOf[r.key]}</div>`:'<span class="hint">ยังไม่มี</span>';
+    const qty=r.p.pkgQty!=null?r.p.pkgQty:(c?num(c.pkgQty):1);
+    const neu=`฿${fmt(r.p.pkgPrice)} / ${qty}${r.p.base?' '+r.p.base:''}<div class="hint">฿${fmt(qty>0?r.p.pkgPrice/qty:0)}/${r.p.base||unitOf[r.key]}</div>${r.p.pkgQty==null?'<div class="hint" style="color:var(--danger)">ไม่มีขนาดในสมุด'+(c?' (ใช้ปริมาณเดิม)':' (ใส่ปริมาณ 1 ไว้ก่อน)')+'</div>':''}`;
+    return `<tr style="${r.on?'':'opacity:.55'}">
+      <td><input type="checkbox" ${r.on?'checked':''} onchange="mbSet(${i},'on',this.checked)"></td>
+      <td><b>${esc(r.item)}</b><div class="hint">${esc(e.cat||'')}${e.count>1?` · ซื้อ ${e.count} ครั้ง`:''}</div></td>
+      <td class="hint">${bought}</td>
+      <td><select onchange="mbSet(${i},'key',this.value)" style="font-size:12px">${[['ing','🧂 วัตถุดิบ'],['pack','📦 บรรจุภัณฑ์'],['other','🧰 อื่นๆ']].map(([k,t])=>`<option value="${k}" ${k===r.key?'selected':''}>${t}</option>`).join('')}</select></td>
+      <td><select onchange="mbSet(${i},'target',this.value)" style="font-size:12px;max-width:220px"><option value="new" ${r.target==='new'?'selected':''}>＋ เพิ่มใหม่</option>${opts}</select></td>
+      <td class="num">${now}</td><td class="num" style="font-weight:700">${neu}</td></tr>`;}).join('')}</tbody></table>`
+    :'<p class="hint">ราคาในคลังตรงกับที่ซื้อล่าสุดหมดแล้ว (เลือก “ทั้งหมด” เพื่อดูทุกรายการ)</p>';
+  document.getElementById('mbCount').textContent='ติ๊กไว้ '+mbRows.filter(r=>r.on).length+' รายการ';
+}
+function applyMb(){
+  const on=mbRows.filter(r=>r.on);if(!on.length){alert('ยังไม่ได้ติ๊กรายการ');return;}
+  state.mbLinks=state.mbLinks||{};let up=0,add=0;
+  on.forEach(r=>{let c=mbTarget(r);
+    if(c){c.pkgPrice=r.p.pkgPrice;if(r.p.pkgQty!=null)c.pkgQty=r.p.pkgQty;up++;}
+    else{c={id:uid(),name:r.item,pkgPrice:r.p.pkgPrice,pkgQty:r.p.pkgQty!=null?r.p.pkgQty:1};catArr(r.key).push(c);add++;}
+    c.mbDate=r.e.date;state.mbLinks[r.item]={key:r.key,id:c.id};});
+  save();closeMb();render();
+  if(document.getElementById('ingOverlay').classList.contains('open'))renderIngList();
+  alert('บันทึกเข้าคลังแล้ว ✓\nอัปเดตราคา '+up+' รายการ · เพิ่มใหม่ '+add+' รายการ\nเมนูที่ใช้วัตถุดิบเหล่านี้คำนวณต้นทุนใหม่ให้แล้ว');
 }
 
 // ---------- overhead modal ----------
@@ -2141,6 +2248,7 @@ document.getElementById('ohOverlay').addEventListener('click',e=>{if(e.target.id
 document.getElementById('packOverlay').addEventListener('click',e=>{if(e.target.id==='packOverlay')closePack();});
 document.getElementById('ingOverlay').addEventListener('click',e=>{if(e.target.id==='ingOverlay')closeIng();});
 document.getElementById('otherOverlay').addEventListener('click',e=>{if(e.target.id==='otherOverlay')closeOther();});
+document.getElementById('mbOverlay').addEventListener('click',e=>{if(e.target.id==='mbOverlay')closeMb();});
 document.getElementById('menuOverlay').addEventListener('click',e=>{if(e.target.id==='menuOverlay')closeMenu();});
 document.getElementById('ledgerOverlay').addEventListener('click',e=>{if(e.target.id==='ledgerOverlay')closeLedger();});
 document.getElementById('ordersOverlay').addEventListener('click',e=>{if(e.target.id==='ordersOverlay')closeOrders();});
