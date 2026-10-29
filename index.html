@@ -168,7 +168,7 @@
     <button class="btn-plat" onclick="openPlat()">⚙ ตั้งค่าแพลตฟอร์ม (GP)</button>
     <button class="btn-ghost" id="campBtn" onclick="toggleCampaign()">🎯 แคมเปญ</button>
     <button class="btn-ghost" onclick="openLedger()">📒 บัญชีรับ-จ่าย</button>
-    <button class="btn-ghost" onclick="document.getElementById('mbFile').click()">📥 นำเข้าจากสมุดรายรับ-รายจ่าย</button>
+    <button class="btn-ghost" onclick="mbPull()">🔄 ดึงวัตถุดิบจากสมุดรายรับ-รายจ่าย</button>
     <input id="mbFile" type="file" accept=".json,application/json" style="display:none" onchange="mbImportFile(this)">
     <button class="btn-ghost" onclick="openOrders()">🧾 บันทึกออเดอร์ LM/Grab</button>
     <button class="btn-ghost" onclick="openCatering()">🍱 จ๊อบเบรค/จัดเลี้ยง</button>
@@ -366,7 +366,7 @@
       <button class="btn-ghost btn-sm" onclick="sortIngCat()">🔤 เรียง ก-ฮ</button>
       <button class="btn-ghost btn-sm" onclick="dedupeIngCat()">🧹 รวมรายการซ้ำ</button>
       <button class="btn-ghost btn-sm" onclick="syncCatalogsToLedger()">🔄 ซิงก์ตามหมวดล่าสุด</button>
-      <button class="btn-base btn-sm" onclick="document.getElementById('mbFile').click()">📥 นำเข้าจากสมุดรายรับ-รายจ่าย</button>
+      <button class="btn-base btn-sm" onclick="mbPull()">🔄 ดึงวัตถุดิบจากสมุดรายรับ-รายจ่าย</button>
     </div>
   </div>
 </div>
@@ -384,6 +384,7 @@
         <button class="btn-ghost btn-sm" onclick="mbCheckAll(false)">เอาติ๊กออก</button>
       </div>
       <div id="mbInfo" class="hint"></div>
+      <div class="hint" style="margin-top:4px">ดึงไม่ได้หรือใช้เครื่องอื่น? <a href="#" onclick="document.getElementById('mbFile').click();return false">เลือกไฟล์ที่ส่งออกจากสมุดแทน</a> · <a href="#" onclick="mbSetLink();return false">ตั้งลิงก์ Google Sheet ของสมุด</a></div>
       <div id="mbTable" style="margin-top:8px;overflow-x:auto"></div>
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn-primary" onclick="applyMb()">✓ บันทึกเข้าคลัง</button><span class="hint" id="mbCount"></span>
@@ -1235,6 +1236,45 @@ function mbFind(item,group){
   for(const k of order){const c=catArr(k).find(x=>mbNorm(x.name)===low);if(c)return {key:k,c};}
   return null;
 }
+// One click: read the money-book's purchases straight from its Google Sheet script (the same link and secret
+// the money-book saved in this browser, since both apps live on the same site), else from its copy in this browser.
+const MB_COST_CATS=['ค่าวัตถุดิบ','ค่าบรรจุภัณฑ์','ค่าอุปกรณ์','Muan'];
+function mbLs(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(_){return null;}}
+function mbCfg(){const c=mbLs('drinkCostCalc_mbSync')||mbLs('money-book-sync');return c&&c.url&&c.key?c:null;}
+function mbSetLink(){
+  const old=mbCfg()||{};
+  const url=prompt('วางลิงก์ Web app ของสมุดรายรับ-รายจ่าย (ดูได้ที่สมุด > ตั้งค่า > ซิงก์มือถือกับคอมผ่าน Google Sheet)',old.url||'');if(url==null)return;
+  const key=prompt('รหัสลับ (ช่องเดียวกันในหน้าตั้งค่าของสมุด)',old.key||'');if(key==null)return;
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url.trim())||!key.trim()){alert('ลิงก์ต้องขึ้นต้นด้วย https://script.google.com/ และต้องใส่รหัสลับ');return;}
+  try{localStorage.setItem('drinkCostCalc_mbSync',JSON.stringify({url:url.trim(),key:key.trim()}));}catch(_){}
+  mbPull();
+}
+function mbItemsFrom(entries,itemSizes){
+  const sizes=itemSizes||{};
+  return (entries||[]).filter(e=>e&&e.kind==='expense'&&(e.biz||(e.name==='Muan'?'Muan':''))==='Muan'&&MB_COST_CATS.includes(e.name)&&String(e.note||'').trim()&&num(e.amount)>0)
+    .map(e=>{const item=String(e.note).trim(),o={date:e.date,cat:e.name,item,amount:num(e.amount)};
+      ['qty','unit','unitPrice','shop'].forEach(k=>{if(e[k])o[k]=e[k];});
+      const z=num(e.size)>0?{size:num(e.size),unit:e.sizeUnit||'ml'}:(sizes[item]&&sizes[item].size>0?{size:sizes[item].size,unit:sizes[item].unit||'ml'}:null);
+      if(z){o.size=z.size;o.sizeUnit=z.unit;}return o;});
+}
+async function mbPull(){
+  const c=mbCfg();let entries=null,sizes=null,from='';
+  if(c){
+    try{const r=await fetch(c.url,{method:'POST',body:JSON.stringify({ops:[],list:true,key:c.key})});const j=await r.json();
+      if(!j.ok)throw new Error(j.error||'');entries=j.entries;sizes=(j.settings||{}).itemSizes;from='Google Sheet (ล่าสุด)';}
+    catch(err){from='';}
+  }
+  if(!entries){const local=mbLs('money-book-entries');
+    if(local&&local.length){entries=local;sizes=(mbLs('money-book-settings')||{}).itemSizes;from='สมุดที่เปิดในเบราว์เซอร์นี้'+(c?' (ต่อ Google Sheet ไม่ได้ ใช้ข้อมูลที่เครื่องจำไว้)':'');}}
+  if(!entries){
+    if(confirm('ยังหาข้อมูลสมุดรายรับ-รายจ่ายในเบราว์เซอร์นี้ไม่เจอ\n\nกด OK เพื่อวางลิงก์ Google Sheet ของสมุด (ทำครั้งเดียว)\nหรือกด Cancel แล้วเลือกไฟล์ที่ส่งออกจากสมุดแทน'))mbSetLink();
+    else document.getElementById('mbFile').click();
+    return;
+  }
+  const items=mbItemsFrom(entries,sizes);
+  if(!items.length){alert('ไม่พบรายการซื้อของร้าน Muan (ค่าวัตถุดิบ ค่าบรรจุภัณฑ์ ค่าอุปกรณ์) ในสมุด');return;}
+  openMb({exportedAt:new Date().toISOString(),items,from});
+}
 function mbImportFile(input){
   const f=input.files[0];if(!f)return;const r=new FileReader();
   r.onload=ev=>{input.value='';let d;
@@ -1251,7 +1291,7 @@ function openMb(d){
     const e=last[item],group=MB_GROUP[e.cat]||keywordGroup(item),p=mbPack(e),hit=mbFind(item,group);
     const row={item,e,p,key:hit?hit.key:MB_KEY[group],target:hit?hit.c.id:'new'};
     row.changed=mbChanged(row);row.on=row.changed;return row;});
-  document.getElementById('mbInfo').innerHTML=`ไฟล์ส่งออกเมื่อ ${esc(String(d.exportedAt||'').slice(0,10))} · ${d.items.length} ครั้งที่ซื้อ · ${mbRows.length} รายการ`;
+  document.getElementById('mbInfo').innerHTML=`${d.from?'ดึงจาก '+esc(d.from):'ไฟล์ส่งออกเมื่อ '+esc(String(d.exportedAt||'').slice(0,10))} · ${d.items.length} ครั้งที่ซื้อ · ${mbRows.length} รายการ`;
   renderMb();document.getElementById('mbOverlay').classList.add('open');
 }
 function closeMb(){document.getElementById('mbOverlay').classList.remove('open');}
