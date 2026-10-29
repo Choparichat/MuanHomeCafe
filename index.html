@@ -566,8 +566,15 @@ function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{
 
 // ---------- cost math ----------
 function lineCost(i){const pp=num(i.pkgPrice),pq=num(i.pkgQty),uq=num(i.useQty);return pq>0?(pp/pq)*uq:0;}
+// ---------- units: g/kg, ml/l/tsp/tbsp (1 ml ≈ 1 g), ชิ้น ----------
+const UNITS=['g','kg','ml','l','tsp','tbsp','ชิ้น'];
+const UNIT_F={g:1,kg:1000,ml:1,l:1000,tsp:5,tbsp:15,'ชิ้น':1};
+function unitConv(use,stock){if(!use||use===stock)return 1;if((use==='ชิ้น')!==(stock==='ชิ้น'))return 1;return (UNIT_F[use]||1)/(UNIT_F[stock]||1);}
+function unitOpts(sel,blank){return `<option value="">${blank}</option>`+UNITS.map(u=>`<option value="${u}" ${u===sel?'selected':''}>${u}</option>`).join('');}
+function unitLabel(u){return u||'หน่วย';}
+function rowStockUnit(r){if(r.catId){const ic=(state.ingCatalog||[]).find(c=>c.id===r.catId);return ic?(ic.unit||''):'';}return r.pkgUnit||'';}
 function baseIngPerUnit(i){if(i.catId){const ic=(state.ingCatalog||[]).find(c=>c.id===i.catId);return ic?ingCatPerUnit(ic):0;}const pq=num(i.pkgQty);return pq>0?num(i.pkgPrice)/pq:0;}
-function baseIngCost(i){return baseIngPerUnit(i)*num(i.useQty);}
+function baseIngCost(i){return baseIngPerUnit(i)*num(i.useQty)*unitConv(i.useUnit,rowStockUnit(i));}
 function getBase(id){return state.bases.find(b=>b.id===id);}
 function baseBatchCost(b){return (b.ingredients||[]).reduce((s,i)=>s+baseIngCost(i),0);}
 function basePerUnit(b){const y=num(b.yield);return y>0?baseBatchCost(b)/y:0;}
@@ -583,7 +590,7 @@ function compPerUnit(c){
   const pq=num(c.pkgQty);return pq>0?num(c.pkgPrice)/pq:0;
 }
 function compQtyAt(c,lv,bl){const ub=bl&&c.blendDiff;if(c.perSweet)return num((ub?c.bqtys:c.qtys)[lv]);return num(ub?c.bqty:c.qty);}
-function compCostAt(c,lv,bl){return compPerUnit(c)*compQtyAt(c,lv,bl);}
+function compCostAt(c,lv,bl){const k=(c.kind==='base'||c.kind==='variant')?1:unitConv(c.useUnit,rowStockUnit(c));return compPerUnit(c)*compQtyAt(c,lv,bl)*k;}
 function componentsAt(m,lv,bl){return m.components.reduce((s,c)=>s+compCostAt(c,lv,bl),0);}
 function getCat(id){return (state.packCatalog||[]).find(c=>c.id===id);}
 function catPerPiece(c){const pq=num(c.pkgQty);return pq>0?num(c.pkgPrice)/pq:0;}
@@ -817,6 +824,7 @@ function updBase(id,field,val){getBase(id)[field]=val;save();renderBaseSummary(i
 function addBaseIng(id){getBase(id).ingredients.push(baseIng('',0));save();renderBaseList();}
 function delBaseIng(bid,iid){const b=getBase(bid);b.ingredients=b.ingredients.filter(i=>i.id!==iid);if(!b.ingredients.length)b.ingredients.push(baseIng('',0));save();renderBaseList();}
 function updBaseIng(bid,iid,field,val){getBase(bid).ingredients.find(i=>i.id===iid)[field]=val;save();if(field==='catId'){renderBaseList();}else{renderBaseSummary(bid);}}
+function setBaseIngUnit(bid,iid,field,val){getBase(bid).ingredients.find(i=>i.id===iid)[field]=val;save();renderBaseList();}
 function renderBaseSummary(id){const b=getBase(id);const el=document.getElementById('bsum-'+id);if(el)el.innerHTML=baseSumHTML(b);
   const ic=document.querySelectorAll('[data-bcost="'+id+'"]');b.ingredients.forEach((i,x)=>{if(ic[x])ic[x].textContent='฿'+fmt(baseIngCost(i));});}
 function baseSumHTML(b){return `ต้นทุนต่อรอบ ฿${fmt(baseBatchCost(b))} · ได้ ${fmt(num(b.yield))} หน่วย · <b>ต้นทุน ฿${fmt(basePerUnit(b))} / หน่วย</b>`;}
@@ -830,12 +838,18 @@ function renderBaseList(){
       </div>
       ${b.ingredients.map(i=>{
         const ingName=i.catId?((getIngCat(i.catId)||{}).name||''):(i.name||'');const bdl='bdl-'+i.id;
-        const custom=i.catId?`<div class="hint" style="margin-top:4px">ใช้ราคาจากคลัง: <b style="color:var(--base)">฿${fmt(baseIngPerUnit(i))}/หน่วย</b></div>`
-          :`<div style="display:flex;gap:6px;margin-top:4px"><input style="flex:2" value="${esc(i.name)}" placeholder="ชื่อ เช่น ชาไทย" oninput="updBaseIng('${b.id}','${i.id}','name',this.value)"><input style="flex:1" type="number" min="0" step="any" value="${i.pkgPrice||''}" placeholder="ราคาแพ็ก" oninput="updBaseIng('${b.id}','${i.id}','pkgPrice',this.value)"><input style="flex:1" type="number" min="0" step="any" value="${i.pkgQty||''}" placeholder="ปริมาณแพ็ก" oninput="updBaseIng('${b.id}','${i.id}','pkgQty',this.value)"></div>`;
+        const IS='border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px;width:100%;box-sizing:border-box';
+        const custom=i.catId?`<div class="hint" style="margin-top:4px">ใช้ราคาจากคลัง: <b style="color:var(--base)">฿${fmt(baseIngPerUnit(i))}/${unitLabel(rowStockUnit(i))}</b></div>`
+          :`<div style="display:grid;grid-template-columns:1fr 1fr 80px;gap:6px;margin-top:6px">
+              <div class="fld"><label style="font-size:11px;color:var(--muted)">ราคาที่ซื้อ (บาท)</label><input style="${IS}" type="number" min="0" step="any" value="${i.pkgPrice||''}" placeholder="เช่น 40" oninput="updBaseIng('${b.id}','${i.id}','pkgPrice',this.value)"></div>
+              <div class="fld"><label style="font-size:11px;color:var(--muted)">ได้ปริมาณ</label><input style="${IS}" type="number" min="0" step="any" value="${i.pkgQty||''}" placeholder="เช่น 12" oninput="updBaseIng('${b.id}','${i.id}','pkgQty',this.value)"></div>
+              <div class="fld"><label style="font-size:11px;color:var(--muted)">หน่วย</label><select style="${IS}" onchange="setBaseIngUnit('${b.id}','${i.id}','pkgUnit',this.value)">${unitOpts(i.pkgUnit||'','หน่วย')}</select></div>
+            </div>`;
         return `<div style="border:1px solid #e6ddf7;border-radius:8px;padding:7px;margin-bottom:6px;background:#fff">
           <div style="display:flex;gap:6px;align-items:center">
             <input list="${bdl}" value="${esc(ingName)}" placeholder="พิมพ์ค้นหาคลัง / กำหนดเอง" onchange="pickBaseIng('${b.id}','${i.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px"><datalist id="${bdl}">${ingDataOpts()}</datalist>
-            <input type="number" min="0" step="any" value="${i.useQty||''}" placeholder="ใช้ต่อรอบ" title="ใช้ต่อรอบ" oninput="updBaseIng('${b.id}','${i.id}','useQty',this.value)" style="width:96px;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px;text-align:right">
+            <input type="number" min="0" step="any" value="${i.useQty||''}" placeholder="ใช้ต่อรอบ" title="ใช้ต่อรอบ" oninput="updBaseIng('${b.id}','${i.id}','useQty',this.value)" style="width:80px;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px;text-align:right">
+            <select title="หน่วยที่ใช้" onchange="setBaseIngUnit('${b.id}','${i.id}','useUnit',this.value)" style="width:64px;border:1px solid var(--line);border-radius:7px;padding:5px 4px;font-family:inherit;font-size:13px;background:#fff">${unitOpts(i.useUnit||'',unitLabel(rowStockUnit(i)))}</select>
             <span class="hint" data-bcost="${b.id}" style="min-width:46px;text-align:right;color:var(--base);font-weight:600">฿${fmt(baseIngCost(i))}</span>
             <button class="btn-danger btn-sm" onclick="delBaseIng('${b.id}','${i.id}')">✕</button>
           </div>${custom}
@@ -874,13 +888,14 @@ function delCatImg(key,id){const c=catArr(key).find(x=>x.id===id);if(!c)return;c
 function renderIngList(){
   const a=state.ingCatalog||[];
   document.getElementById('ingList').innerHTML=a.map((c,idx)=>`
-    <div class="cat-row" style="grid-template-columns:auto auto 2fr 1fr 1fr auto auto">
+    <div class="cat-row" style="grid-template-columns:auto auto 2fr 1fr 1fr 70px auto auto">
       <div class="movebtns"><button onclick="moveIngCat('${c.id}',-1)" ${idx===0?'disabled':''}>▲</button><button onclick="moveIngCat('${c.id}',1)" ${idx===a.length-1?'disabled':''}>▼</button></div>
       ${catImgCell('ing',c)}
       <div class="fld"><label>ชื่อ</label><input value="${esc(c.name)}" oninput="updIngCat('${c.id}','name',this.value)"></div>
       <div class="fld"><label>ราคาแพ็ก</label><input type="number" min="0" step="any" value="${c.pkgPrice||''}" placeholder="0" oninput="updIngCat('${c.id}','pkgPrice',this.value)"></div>
       <div class="fld"><label>ปริมาณแพ็ก</label><input type="number" min="0" step="any" value="${c.pkgQty||''}" placeholder="0" oninput="updIngCat('${c.id}','pkgQty',this.value)"></div>
-      <div class="fld"><label>ต้นทุน/หน่วย</label><div id="ingpp-${c.id}" style="font-weight:700;color:var(--brand);padding:5px 0;font-size:13px">฿${fmt(ingCatPerUnit(c))}</div></div>
+      <div class="fld"><label>หน่วย</label><select onchange="updIngCat('${c.id}','unit',this.value);renderIngList()" style="${UNITSEL}">${unitOpts(c.unit||'','-')}</select></div>
+      <div class="fld"><label>ต้นทุน/${unitLabel(c.unit)}</label><div id="ingpp-${c.id}" style="font-weight:700;color:var(--brand);padding:5px 0;font-size:13px">฿${fmt(ingCatPerUnit(c))}</div></div>
       <button class="btn-danger btn-sm" onclick="delIngCat('${c.id}')">ลบ</button>
     </div>`).join('')||'<p class="hint">ยังไม่มีรายการในคลัง</p>';
 }
@@ -1335,13 +1350,16 @@ function summaryHTML(){
 }
 function refreshSummary(){document.getElementById('summary').innerHTML=summaryHTML();}
 
+const UNITSEL='border:1px solid var(--line);border-radius:7px;padding:5px 4px;font-family:inherit;font-size:13px;background:#fff';
+function useUnitSel(m,c){if(c.kind==='base'||c.kind==='variant')return '';return `<div class="f"><label>หน่วย</label><select onchange="setCompUnit('${m.id}','${c.id}','useUnit',this.value)" style="${UNITSEL}">${unitOpts(c.useUnit||'',unitLabel(rowStockUnit(c)))}</select></div>`;}
+function setCompUnit(mid,cid,field,val){const c=state.menus.find(x=>x.id===mid).components.find(x=>x.id===cid);c[field]=val;save();renderDetail(mid);refreshCard(mid);refreshSummary();}
 function qtyArea(m,c){
   const np=(m.blend&&m.blend.on)?' (ไม่ปั่น)':'';
   if(c.perSweet){
-    return `<div class="qty">${SWEET.map(l=>`<div class="f"><label>หวาน ${l}%${np}</label><input type="number" min="0" step="any" value="${c.qtys[l]||''}" placeholder="0" oninput="updCompQty('${m.id}','${c.id}',${l},this.value)"></div>`).join('')}
+    return `<div class="qty">${SWEET.map(l=>`<div class="f"><label>หวาน ${l}%${np}</label><input type="number" min="0" step="any" value="${c.qtys[l]||''}" placeholder="0" oninput="updCompQty('${m.id}','${c.id}',${l},this.value)"></div>`).join('')}${useUnitSel(m,c)}
       <span class="cc" id="cc-${c.id}">฿${fmt(compCostAt(c,m.sweetRef||100,false))}</span></div>`;
   }
-  return `<div class="qty"><div class="f"><label>ใช้ต่อ${m.type==='dessert'?'สูตร':'แก้ว'}${np}</label><input type="number" min="0" step="any" value="${c.qty||''}" placeholder="0" oninput="updComp('${m.id}','${c.id}','qty',this.value)"></div>
+  return `<div class="qty"><div class="f"><label>ใช้ต่อ${m.type==='dessert'?'สูตร':'แก้ว'}${np}</label><input type="number" min="0" step="any" value="${c.qty||''}" placeholder="0" oninput="updComp('${m.id}','${c.id}','qty',this.value)"></div>${useUnitSel(m,c)}
     <span class="cc" id="cc-${c.id}">฿${fmt(compCostAt(c,m.sweetRef||100,false))}</span></div>`;
 }
 function qtyAreaB(m,c){
@@ -1396,10 +1414,11 @@ function compHTML(m,c){
   const ingName=c.catId?((getIngCat(c.catId)||{}).name||''):(c.name||'');
   const dlid='ingdl-'+c.id;
   const detail=c.catId
-    ? `<div class="hint" style="margin-top:5px">ใช้ราคาจากคลัง: <b>฿${fmt(compPerUnit(c))}/หน่วย</b> · พิมพ์ชื่ออื่นในช่องเพื่อเปลี่ยน/กำหนดเอง</div>`
+    ? `<div class="hint" style="margin-top:5px">ใช้ราคาจากคลัง: <b>฿${fmt(compPerUnit(c))}/${unitLabel(rowStockUnit(c))}</b> · พิมพ์ชื่ออื่นในช่องเพื่อเปลี่ยน/กำหนดเอง</div>`
     : `<div class="pk">
          <div class="f"><label>ราคาแพ็ก</label><input type="number" min="0" step="any" value="${c.pkgPrice||''}" placeholder="0" oninput="updComp('${m.id}','${c.id}','pkgPrice',this.value)"></div>
          <div class="f"><label>ปริมาณแพ็ก</label><input type="number" min="0" step="any" value="${c.pkgQty||''}" placeholder="0" oninput="updComp('${m.id}','${c.id}','pkgQty',this.value)"></div>
+         <div class="f"><label>หน่วย</label><select onchange="setCompUnit('${m.id}','${c.id}','pkgUnit',this.value)" style="${UNITSEL}">${unitOpts(c.pkgUnit||'','หน่วย')}</select></div>
        </div>`;
   return `<div class="comp">
     <div class="top"><span class="badge s">วัตถุดิบ</span>
