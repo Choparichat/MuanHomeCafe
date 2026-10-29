@@ -527,8 +527,10 @@ function normMenu(m){
   m.components.forEach(c=>{c.qtys=c.qtys||{100:0,50:0,25:0,0:0};c.bqtys=c.bqtys||{100:0,50:0,25:0,0:0};c.bqty=c.bqty||0;c.blendDiff=!!c.blendDiff;if(c.catId==null)c.catId='';
     if(c.kind==='variant'){c.options=c.options||[];c.options.forEach(o=>{if(o.catId==null)o.catId='';});if(!c.options.length)c.options.push(varOpt(''));if(!c.sel||!c.options.find(o=>o.id===c.sel))c.sel=c.options[0].id;}});
   if(!m.components.length)m.components.push(simpleComp(''));
+  if(m.type==='dessert')dessertFlatten(m);
   return m;
 }
+function dessertFlatten(m){(m.components||[]).forEach(c=>{if(c.perSweet){if(!num(c.qty))c.qty=num(c.qtys[100])||num(c.qtys[50])||num(c.qtys[25])||num(c.qtys[0]);c.perSweet=false;}});}
 function load(){
   let raw=localStorage.getItem(KEY);
   if(raw){try{state=JSON.parse(raw);}catch(e){state=defaultState();}}
@@ -676,7 +678,8 @@ function makeSize(id){
 }
 
 function addSimple(id){state.menus.find(x=>x.id===id).components.push(simpleComp());save();renderDetail(id);}
-function addBaseUse(id){const def=state.bases[0]?state.bases[0].id:'';state.menus.find(x=>x.id===id).components.push(baseComp(def));save();renderDetail(id);}
+function basesFor(m){const t=m&&m.type==='dessert'?'dessert':'drink';return state.bases.filter(b=>!b.type||b.type===t);}
+function addBaseUse(id){const m=state.menus.find(x=>x.id===id);const list=basesFor(m);const def=(list[0]||state.bases[0]||{}).id||'';const c=baseComp(def);if(m.type==='dessert'){c.perSweet=false;c.qty=1;}m.components.push(c);save();renderDetail(id);}
 function addVariant(id){state.menus.find(x=>x.id===id).components.push(variantComp());save();renderDetail(id);}
 function variantPresets(){
   const map={};
@@ -766,7 +769,7 @@ function acPackPick(mid,iid,cid){const i=state.menus.find(x=>x.id===mid).packagi
 function pickVarIng(mid,cid,oid,val){const o=getComp(mid,cid).options.find(x=>x.id===oid);const hit=findIngByName(val);o.catId=hit?hit.id:'';save();renderDetail(mid);}
 function findPackByName(v){v=(v||'').trim().toLowerCase();return (state.packCatalog||[]).find(x=>(x.name||'').trim().toLowerCase()===v);}
 function packDataOptsName(){return (state.packCatalog||[]).slice().sort(byName).map(x=>`<option value="${esc(x.name)}">฿${fmt(catPerPiece(x))}/ชิ้น</option>`).join('');}
-function baseDataOpts(){return state.bases.map(b=>`<option value="${esc(b.name)}">฿${fmt(basePerUnit(b))}/หน่วย</option>`).join('');}
+function baseDataOpts(m){return basesFor(m).map(b=>`<option value="${esc(b.name)}">฿${fmt(basePerUnit(b))}/หน่วย</option>`).join('');}
 function menuDataOpts(){return state.menus.map(m=>`<option value="${esc(m.name||'(ไม่มีชื่อ)')}">฿${fmt(num(m.price))}</option>`).join('');}
 function pickBaseIng(bid,iid,val){const it=getBase(bid).ingredients.find(i=>i.id===iid);const hit=findIngByName(val);if(hit){it.catId=hit.id;}else{it.catId='';it.name=(val||'').trim();}save();renderBaseList();}
 function pickCompBase(mid,cid,val){const v=(val||'').trim().toLowerCase();const hit=state.bases.find(b=>(b.name||'').trim().toLowerCase()===v);if(hit)updComp(mid,cid,'baseId',hit.id);}
@@ -802,7 +805,7 @@ function addPack(id){state.menus.find(x=>x.id===id).packaging.push(pack());save(
 function delPack(mid,iid){const m=state.menus.find(x=>x.id===mid);m.packaging=m.packaging.filter(i=>i.id!==iid);save();renderDetail(mid);}
 function updPack(mid,iid,field,val){const i=state.menus.find(x=>x.id===mid).packaging.find(x=>x.id===iid);i[field]=val;save();if(field==='catId'){renderDetail(mid);}else{refreshCard(mid);refreshSummary();}}
 
-function upd(mid,field,val){const m=state.menus.find(x=>x.id===mid);m[field]=val;save();if(field==='type'){renderDetail(mid);}else{refreshCard(mid);}refreshSummary();}
+function upd(mid,field,val){const m=state.menus.find(x=>x.id===mid);m[field]=val;if(field==='type'&&val==='dessert')dessertFlatten(m);save();if(field==='type'){renderDetail(mid);}else{refreshCard(mid);}refreshSummary();}
 function updApp(mid,pid,val){const m=state.menus.find(x=>x.id===mid);m.appPrices=m.appPrices||{};m.appPrices[pid]=val;save();refreshCard(mid);refreshSummary();}
 function toggleBlend(mid,val){const m=state.menus.find(x=>x.id===mid);m.blend.on=val;save();rebuildCard(mid);refreshSummary();}
 function updBlend(mid,field,val){const m=state.menus.find(x=>x.id===mid);m.blend[field]=val;save();refreshCard(mid);refreshSummary();}
@@ -818,7 +821,7 @@ function clearAll(){if(confirm('ล้างเฉพาะเมนูทั้
 // ---------- base modal ----------
 function openBase(){renderBaseList();document.getElementById('baseOverlay').classList.add('open');}
 function closeBase(){document.getElementById('baseOverlay').classList.remove('open');render();}
-function addBase(){state.bases.push({id:uid(),name:'เบสใหม่',yield:0,ingredients:[baseIng('',0)]});save();renderBaseList();}
+function addBase(){state.bases.push({id:uid(),name:'เบสใหม่',type:baseFilter,yield:0,ingredients:[baseIng('',0)]});save();renderBaseList();}
 function delBase(id){if(confirm('ลบเบสนี้? เมนูที่อ้างถึงจะคิดต้นทุนเบสนั้นเป็น 0')){state.bases=state.bases.filter(b=>b.id!==id);save();renderBaseList();}}
 function updBase(id,field,val){getBase(id)[field]=val;save();renderBaseSummary(id);}
 function addBaseIng(id){getBase(id).ingredients.push(baseIng('',0));save();renderBaseList();}
@@ -828,12 +831,17 @@ function setBaseIngUnit(bid,iid,field,val){getBase(bid).ingredients.find(i=>i.id
 function renderBaseSummary(id){const b=getBase(id);const el=document.getElementById('bsum-'+id);if(el)el.innerHTML=baseSumHTML(b);
   const ic=document.querySelectorAll('[data-bcost="'+id+'"]');b.ingredients.forEach((i,x)=>{if(ic[x])ic[x].textContent='฿'+fmt(baseIngCost(i));});}
 function baseSumHTML(b){return `ต้นทุนต่อรอบ ฿${fmt(baseBatchCost(b))} · ได้ ${fmt(num(b.yield))} หน่วย · <b>ต้นทุน ฿${fmt(basePerUnit(b))} / หน่วย</b>`;}
+let baseFilter='';
+function setBaseFilter(v){baseFilter=v;renderBaseList();}
 function renderBaseList(){
-  document.getElementById('baseList').innerHTML=state.bases.map(b=>`
+  const tabs=[['','ทั้งหมด'],['drink','🥤 เครื่องดื่ม'],['dessert','🍪 ขนม']].map(([v,l])=>`<button class="btn-ghost btn-sm" onclick="setBaseFilter('${v}')" style="${baseFilter===v?'background:var(--base);color:#fff;border-color:var(--base)':''}">${l}</button>`).join(' ');
+  const shown=baseFilter?state.bases.filter(b=>!b.type||b.type===baseFilter):state.bases;
+  document.getElementById('baseList').innerHTML=`<div style="display:flex;gap:6px;margin-bottom:10px">${tabs}</div>`+(shown.map(b=>`
     <div class="base-edit">
       <div class="bhead">
         <div class="fld" style="flex:2"><label>ชื่อเบส</label><input value="${esc(b.name)}" oninput="updBase('${b.id}','name',this.value)"></div>
         <div class="fld" style="flex:1"><label>ปริมาณที่ได้ (มล./กรัม/ชิ้น)</label><input type="number" min="0" step="any" value="${b.yield||''}" placeholder="เช่น 180 มล. หรือ 9 ชิ้น" oninput="updBase('${b.id}','yield',this.value)"></div>
+        <div class="fld" style="flex:1"><label>ใช้กับ</label><select onchange="updBase('${b.id}','type',this.value)" style="border:1px solid var(--line);border-radius:7px;padding:7px 6px;font-family:inherit;font-size:13px;background:#fff"><option value="" ${!b.type?'selected':''}>ทั้งคู่</option><option value="drink" ${b.type==='drink'?'selected':''}>🥤 เครื่องดื่ม</option><option value="dessert" ${b.type==='dessert'?'selected':''}>🍪 ขนม</option></select></div>
         <button class="btn-danger btn-sm" onclick="delBase('${b.id}')">ลบเบส</button>
       </div>
       ${b.ingredients.map(i=>{
@@ -857,7 +865,7 @@ function renderBaseList(){
       <button class="btn-base btn-sm" onclick="addBaseIng('${b.id}')">＋ ส่วนผสม</button>
       <div class="base-sum" id="bsum-${b.id}">${baseSumHTML(b)}</div>
       <div class="hint">น้ำ/น้ำแข็งใส่ราคาแพ็ก 0 ได้ · เครื่องดื่ม: ตั้งปริมาณที่ได้เป็น มล. (เช่น ชาไทย 180) · ขนม/เบเกอรี่: ตั้งเป็น “จำนวนชิ้น” (เช่น บราวนี่ 1 ถาด ใส่เนย/แป้ง/ช็อกฯ → ปริมาณที่ได้ = 9 ชิ้น → ได้ต้นทุนต่อชิ้น) แล้วเอาไปใช้ในเมนูขนมด้วยปุ่ม ＋ ใช้เบส/สูตร (จำนวน = 1 ชิ้น)</div>
-    </div>`).join('')||'<p class="hint">ยังไม่มีเบส</p>';
+    </div>`).join('')||'<p class="hint">ยังไม่มีเบส</p>');
 }
 
 // ---------- ingredient catalog modal ----------
@@ -1379,9 +1387,9 @@ function compHTML(m,c){
     const bName=(getBase(c.baseId)||{}).name||'';const cbdl='cbdl-'+c.id;
     return `<div class="comp base">
       <div class="top"><span class="badge b">เบส</span>
-        <input list="${cbdl}" value="${esc(bName)}" placeholder="พิมพ์ค้นหาเบส" onchange="pickCompBase('${m.id}','${c.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px"><datalist id="${cbdl}">${baseDataOpts()}</datalist>
+        <input list="${cbdl}" value="${esc(bName)}" placeholder="พิมพ์ค้นหาเบส" onchange="pickCompBase('${m.id}','${c.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px"><datalist id="${cbdl}">${baseDataOpts(m)}</datalist>
         <button class="del" onclick="delComp('${m.id}','${c.id}')">✕</button></div>
-      <label class="togsweet"><input type="checkbox" ${c.perSweet?'checked':''} onchange="toggleCompSweet('${m.id}','${c.id}',this.checked)"> แยกปริมาณตามความหวาน</label>
+      ${m.type==='dessert'?'':`<label class="togsweet"><input type="checkbox" ${c.perSweet?'checked':''} onchange="toggleCompSweet('${m.id}','${c.id}',this.checked)"> แยกปริมาณตามความหวาน</label>`}
       ${qtyArea(m,c)}
       ${blendSection(m,c)}
     </div>`;
