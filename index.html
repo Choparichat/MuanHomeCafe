@@ -1341,7 +1341,7 @@ function qtyArea(m,c){
     return `<div class="qty">${SWEET.map(l=>`<div class="f"><label>หวาน ${l}%${np}</label><input type="number" min="0" step="any" value="${c.qtys[l]||''}" placeholder="0" oninput="updCompQty('${m.id}','${c.id}',${l},this.value)"></div>`).join('')}
       <span class="cc" id="cc-${c.id}">฿${fmt(compCostAt(c,m.sweetRef||100,false))}</span></div>`;
   }
-  return `<div class="qty"><div class="f"><label>ใช้ต่อ${m.type==='dessert'?'ชิ้น':'แก้ว'}${np}</label><input type="number" min="0" step="any" value="${c.qty||''}" placeholder="0" oninput="updComp('${m.id}','${c.id}','qty',this.value)"></div>
+  return `<div class="qty"><div class="f"><label>ใช้ต่อ${m.type==='dessert'?'สูตร':'แก้ว'}${np}</label><input type="number" min="0" step="any" value="${c.qty||''}" placeholder="0" oninput="updComp('${m.id}','${c.id}','qty',this.value)"></div>
     <span class="cc" id="cc-${c.id}">฿${fmt(compCostAt(c,m.sweetRef||100,false))}</span></div>`;
 }
 function qtyAreaB(m,c){
@@ -1510,6 +1510,7 @@ function cardHTML(m){
       <input class="menu-name" value="${esc(m.name)}" placeholder="${dessert?'ชื่อขนม เช่น บราวนี่':'ชื่อเมนู เช่น ชาไทยเย็น'}" oninput="upd('${m.id}','name',this.value)">
 
       <div class="sec-title">${dessert?'🧁 วัตถุดิบ':'🧋 วัตถุดิบ / เบส'}</div>
+      ${dessert?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px">🍰 1 สูตร/ถาดนี้ทำได้ <input type="number" min="1" step="1" value="${m.batchYield||''}" placeholder="1" oninput="upd('${m.id}','batchYield',this.value)" style="width:60px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:4px;font-family:inherit"> ชิ้น <span style="color:var(--muted)">(ใส่วัตถุดิบทั้งสูตร ระบบหารต่อชิ้นให้)</span> <span id="batchpp-${m.id}" style="margin-left:auto;font-weight:600;color:var(--brand)">${batchPPText(m)}</span></div>`:''}
       <div id="comps-${m.id}">${m.components.map(c=>compHTML(m,c)).join('')}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-ghost btn-sm" onclick="addSimple('${m.id}')">＋ วัตถุดิบ</button>
@@ -1520,7 +1521,6 @@ function cardHTML(m){
           <option value="__new__">＋ สร้างกลุ่มใหม่…</option>
         </select>
       </div>
-      ${dessert?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px">🍰 1 สูตร/ถาดนี้ทำได้ <input type="number" min="1" step="1" value="${m.batchYield||''}" placeholder="1" oninput="upd('${m.id}','batchYield',this.value)" style="width:60px;text-align:center;border:1px solid var(--line);border-radius:6px;padding:4px;font-family:inherit"> ชิ้น <span style="color:var(--muted)">(ใส่วัตถุดิบทั้งสูตร ระบบหารต่อชิ้นให้)</span> <span id="batchpp-${m.id}" style="margin-left:auto;font-weight:600;color:var(--brand)">${batchPPText(m)}</span></div>`:''}
 
       <div class="sec-title">📦 บรรจุภัณฑ์</div>
       <div>${(m.packaging||[]).map(i=>packCardHTML(m,i)).join('')}</div>
