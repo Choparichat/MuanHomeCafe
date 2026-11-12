@@ -143,6 +143,12 @@
   .movebtns button:hover{background:var(--soft)}
   .movebtns button:disabled{opacity:.3}
   @media(max-width:560px){.plat-edit .grid4{grid-template-columns:1fr 1fr}.base-ing{grid-template-columns:1fr 1fr}.menu-grid{grid-template-columns:1fr}}
+.ipick{position:fixed;z-index:9999;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:340px;overflow-y:auto;padding:4px}
+.ipick .o{display:flex;gap:10px;align-items:center;padding:6px 8px;border-radius:8px;cursor:pointer}
+.ipick .o.on,.ipick .o:hover{background:#f6efe6}
+.ipick .th{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:none;background:#faf7f2;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted)}
+.ipick .n{font-weight:600;font-size:13px;line-height:1.3}.ipick .m{font-size:11px;color:var(--muted)}
+.ithumb{width:34px;height:34px;border-radius:7px;object-fit:cover;flex:none;border:1px solid var(--line);cursor:zoom-in}
 </style>
 </head>
 <body>
@@ -856,7 +862,7 @@ function renderBaseList(){
             </div>`;
         return `<div style="border:1px solid #e6ddf7;border-radius:8px;padding:7px;margin-bottom:6px;background:#fff">
           <div style="display:flex;gap:6px;align-items:center">
-            <input list="${bdl}" value="${esc(ingName)}" placeholder="พิมพ์ค้นหาคลัง / กำหนดเอง" onchange="pickBaseIng('${b.id}','${i.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px"><datalist id="${bdl}">${ingDataOpts()}</datalist>
+            <input data-ipick="1" autocomplete="off" value="${esc(ingName)}" placeholder="พิมพ์ค้นหาคลัง / กำหนดเอง" onchange="pickBaseIng('${b.id}','${i.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px"><datalist id="${bdl}">${ingDataOpts()}</datalist>
             <input type="number" min="0" step="any" value="${i.useQty||''}" placeholder="ใช้ต่อรอบ" title="ใช้ต่อรอบ" oninput="updBaseIng('${b.id}','${i.id}','useQty',this.value)" style="width:80px;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px;text-align:right">
             <select title="หน่วยที่ใช้" onchange="setBaseIngUnit('${b.id}','${i.id}','useUnit',this.value)" style="width:64px;border:1px solid var(--line);border-radius:7px;padding:5px 4px;font-family:inherit;font-size:13px;background:#fff">${unitOpts(i.useUnit||'',unitLabel(rowStockUnit(i)))}</select>
             <span class="hint" data-bcost="${b.id}" style="min-width:46px;text-align:right;color:var(--base);font-weight:600">฿${fmt(baseIngCost(i))}</span>
@@ -881,7 +887,7 @@ function renderCatKey(key){if(key==='ing')renderIngList();else if(key==='pack')r
 function catImgCell(key,c){
   return `<div style="position:relative;width:42px;height:42px;flex-shrink:0">
     <label title="คลิกเพื่อใส่/เปลี่ยนรูป" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:8px;border:1px solid var(--line);background:#faf7f2;overflow:hidden">
-      ${c.image?`<img src="${c.image}" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:15px;color:var(--muted)">📷</span>`}
+      ${c.image?`<img src="${c.image}" style="width:100%;height:100%;object-fit:cover">`:mbPicFor(c)?`<img src="${mbPicFor(c)}" title="รูปจากสมุดรายรับ-รายจ่าย" style="width:100%;height:100%;object-fit:cover">`:`<span style="font-size:15px;color:var(--muted)">📷</span>`}
       <input type="file" accept="image/*" style="display:none" onchange="setCatImg('${key}','${c.id}',this.files[0])">
     </label>
     ${c.image?`<button onclick="delCatImg('${key}','${c.id}')" title="ลบรูป" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:11px;line-height:18px;cursor:pointer;padding:0">✕</button>`:''}
@@ -1261,11 +1267,11 @@ async function mbPull(){
   const c=mbCfg();let entries=null,sizes=null,from='';
   if(c){
     try{const r=await fetch(c.url,{method:'POST',body:JSON.stringify({ops:[],list:true,key:c.key})});const j=await r.json();
-      if(!j.ok)throw new Error(j.error||'');entries=j.entries;sizes=(j.settings||{}).itemSizes;from='Google Sheet (ล่าสุด)';}
+      if(!j.ok)throw new Error(j.error||'');entries=j.entries;sizes=(j.settings||{}).itemSizes;mbTakePics(j.settings);from='Google Sheet (ล่าสุด)';}
     catch(err){from='';}
   }
   if(!entries){const local=mbLs('money-book-entries');
-    if(local&&local.length){entries=local;sizes=(mbLs('money-book-settings')||{}).itemSizes;from='สมุดที่เปิดในเบราว์เซอร์นี้'+(c?' (ต่อ Google Sheet ไม่ได้ ใช้ข้อมูลที่เครื่องจำไว้)':'');}}
+    if(local&&local.length){entries=local;sizes=(mbLs('money-book-settings')||{}).itemSizes;await mbLoadPics();from='สมุดที่เปิดในเบราว์เซอร์นี้'+(c?' (ต่อ Google Sheet ไม่ได้ ใช้ข้อมูลที่เครื่องจำไว้)':'');}}
   if(!entries){
     if(confirm('ยังหาข้อมูลสมุดรายรับ-รายจ่ายในเบราว์เซอร์นี้ไม่เจอ\n\nกด OK เพื่อวางลิงก์ Google Sheet ของสมุด (ทำครั้งเดียว)\nหรือกด Cancel แล้วเลือกไฟล์ที่ส่งออกจากสมุดแทน'))mbSetLink();
     else document.getElementById('mbFile').click();
@@ -1275,6 +1281,54 @@ async function mbPull(){
   if(!items.length){alert('ไม่พบรายการซื้อของร้าน Muan (ค่าวัตถุดิบ ค่าบรรจุภัณฑ์ ค่าอุปกรณ์) ในสมุด');return;}
   openMb({exportedAt:new Date().toISOString(),items,from});
 }
+// Item photos from the money-book ("img:<item>" = {d: small jpeg}). They are only read, never copied into this
+// app's own storage: the money-book on this site keeps them in IndexedDB "money-book", the sheet sends them on a pull.
+let mbPics={};
+function mbTakePics(o){let n=0;for(const k in (o||{}))if(k.startsWith('img:')&&o[k]&&o[k].d){mbPics[k.slice(4)]=o[k].d;n++;}return n;}
+async function mbLoadPics(){
+  mbTakePics(mbLs('money-book-settings'));
+  try{
+    if(indexedDB.databases&&!(await indexedDB.databases()).some(d=>d.name==='money-book'))return;
+    const db=await new Promise((ok,bad)=>{const r=indexedDB.open('money-book');
+      // never create the money-book's database from here: it would be made without its store
+      r.onupgradeneeded=()=>{r.transaction.abort();};r.onsuccess=()=>ok(r.result);r.onerror=()=>bad(r.error);});
+    if(!db.objectStoreNames.contains('kv')){db.close();return;}
+    await new Promise(ok=>{const t=db.transaction('kv'),c=t.objectStore('kv').openCursor();
+      c.onsuccess=()=>{const x=c.result;if(x){if(typeof x.key==='string'&&x.key.startsWith('img:')&&x.value&&x.value.d)mbPics[x.key.slice(4)]=x.value.d;x.continue();}else ok();};c.onerror=()=>ok();});
+    db.close();
+  }catch(_){}
+}
+function mbNoteOf(id){const L=state.mbLinks||{};for(const k in L)if(L[k].id===id)return k;return '';}
+function mbPicFor(c){if(!c)return '';const n=mbNoteOf(c.id);return (n&&mbPics[n])||mbPics[(c.name||'').trim()]||'';}
+function catPic(c){return c?(c.image||mbPicFor(c)):'';}
+function ingThumb(catId){const p=catPic(catId?getIngCat(catId):null);return p?`<img src="${p}" class="ithumb" alt="" onclick="ipZoom(this.src)">`:'';}
+function ipZoom(src){const w=window.open('');if(w)w.document.write('<img src="'+src+'" style="max-width:100%">');}
+// Ingredient picker with photos, price and where/when it was last bought (replaces the plain browser list)
+let ipEl=null,ipInput=null,ipIdx=0,ipList=[];
+function ipMeta(c){return '฿'+fmt(ingCatPerUnit(c))+'/หน่วย'+(c.mbDate?' · ซื้อล่าสุด '+c.mbDate+(c.mbShop?' '+c.mbShop:''):'');}
+function ipShow(inp){
+  ipInput=inp;if(!ipEl){ipEl=document.createElement('div');ipEl.className='ipick';document.body.appendChild(ipEl);
+    ipEl.addEventListener('mousedown',e=>{const o=e.target.closest('.o');if(!o)return;e.preventDefault();ipChoose(+o.dataset.i);});}
+  const q=mbNorm(inp.value),all=(state.ingCatalog||[]).slice().sort(byName);
+  ipList=(q&&!all.some(c=>mbNorm(c.name)===q)?all.filter(c=>mbNorm(c.name).includes(q)):all).slice(0,80);
+  if(!ipList.length){ipHide();return;}
+  ipIdx=Math.min(ipIdx,ipList.length-1);
+  ipEl.innerHTML=ipList.map((c,i)=>{const p=catPic(c);return `<div class="o${i===ipIdx?' on':''}" data-i="${i}">${p?`<img class="th" src="${p}" alt="">`:'<span class="th">📷</span>'}<div><div class="n">${esc(c.name)}</div><div class="m">${esc(ipMeta(c))}</div></div></div>`;}).join('');
+  const r=inp.getBoundingClientRect(),below=window.innerHeight-r.bottom,w=Math.max(r.width,300);
+  ipEl.style.left=Math.max(4,Math.min(r.left,window.innerWidth-w-4))+'px';ipEl.style.width=Math.min(w,window.innerWidth-8)+'px';
+  if(below<220&&r.top>below){ipEl.style.top='';ipEl.style.bottom=(window.innerHeight-r.top+4)+'px';ipEl.style.maxHeight=Math.min(340,r.top-8)+'px';}
+  else{ipEl.style.bottom='';ipEl.style.top=(r.bottom+4)+'px';ipEl.style.maxHeight=Math.min(340,below-8)+'px';}
+  ipEl.style.display='block';
+}
+function ipHide(){if(ipEl)ipEl.style.display='none';}
+function ipChoose(i){const c=ipList[i],inp=ipInput;if(!c||!inp)return;inp.value=c.name;ipHide();inp.dispatchEvent(new Event('change',{bubbles:true}));}
+document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input[data-ipick]')){ipIdx=0;ipShow(e.target);}});
+document.addEventListener('input',e=>{if(e.target===ipInput){ipIdx=0;ipShow(e.target);}});
+document.addEventListener('focusout',e=>{if(e.target===ipInput)setTimeout(ipHide,150);});
+document.addEventListener('keydown',e=>{if(e.target!==ipInput||!ipEl||ipEl.style.display==='none')return;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();ipIdx=(ipIdx+(e.key==='ArrowDown'?1:-1)+ipList.length)%ipList.length;ipShow(ipInput);const on=ipEl.querySelector('.on');if(on)on.scrollIntoView({block:'nearest'});}
+  else if(e.key==='Enter'){e.preventDefault();ipChoose(ipIdx);}else if(e.key==='Escape')ipHide();});
+window.addEventListener('scroll',e=>{if(ipEl&&ipEl.style.display!=='none'&&!ipEl.contains(e.target))ipHide();},true);
 function mbImportFile(input){
   const f=input.files[0];if(!f)return;const r=new FileReader();
   r.onload=ev=>{input.value='';let d;
@@ -1315,7 +1369,7 @@ function renderMb(){
     const neu=`฿${fmt(r.p.pkgPrice)} / ${qty}${r.p.base?' '+r.p.base:''}<div class="hint">฿${fmt(qty>0?r.p.pkgPrice/qty:0)}/${r.p.base||unitOf[r.key]}</div>${r.p.pkgQty==null?'<div class="hint" style="color:var(--danger)">ไม่มีขนาดในสมุด'+(c?' (ใช้ปริมาณเดิม)':' (ใส่ปริมาณ 1 ไว้ก่อน)')+'</div>':''}`;
     return `<tr style="${r.on?'':'opacity:.55'}">
       <td><input type="checkbox" ${r.on?'checked':''} onchange="mbSet(${i},'on',this.checked)"></td>
-      <td><b>${esc(r.item)}</b><div class="hint">${esc(e.cat||'')}${e.count>1?` · ซื้อ ${e.count} ครั้ง`:''}</div></td>
+      <td><div style="display:flex;gap:8px;align-items:center">${mbPics[r.item]?`<img src="${mbPics[r.item]}" class="ithumb" alt="">`:''}<div><b>${esc(r.item)}</b><div class="hint">${esc(e.cat||'')}${e.count>1?` · ซื้อ ${e.count} ครั้ง`:''}</div></div></div></td>
       <td class="hint">${bought}</td>
       <td><select onchange="mbSet(${i},'key',this.value)" style="font-size:12px">${[['ing','🧂 วัตถุดิบ'],['pack','📦 บรรจุภัณฑ์'],['other','🧰 อื่นๆ']].map(([k,t])=>`<option value="${k}" ${k===r.key?'selected':''}>${t}</option>`).join('')}</select></td>
       <td><select onchange="mbSet(${i},'target',this.value)" style="font-size:12px;max-width:220px"><option value="new" ${r.target==='new'?'selected':''}>＋ เพิ่มใหม่</option>${opts}</select></td>
@@ -1329,7 +1383,7 @@ function applyMb(){
   on.forEach(r=>{let c=mbTarget(r);
     if(c){c.pkgPrice=r.p.pkgPrice;if(r.p.pkgQty!=null)c.pkgQty=r.p.pkgQty;up++;}
     else{c={id:uid(),name:r.item,pkgPrice:r.p.pkgPrice,pkgQty:r.p.pkgQty!=null?r.p.pkgQty:1};catArr(r.key).push(c);add++;}
-    c.mbDate=r.e.date;state.mbLinks[r.item]={key:r.key,id:c.id};});
+    c.mbDate=r.e.date;if(r.e.shop)c.mbShop=r.e.shop;else delete c.mbShop;state.mbLinks[r.item]={key:r.key,id:c.id};});
   save();closeMb();render();
   if(document.getElementById('ingOverlay').classList.contains('open'))renderIngList();
   alert('บันทึกเข้าคลังแล้ว ✓\nอัปเดตราคา '+up+' รายการ · เพิ่มใหม่ '+add+' รายการ\nเมนูที่ใช้วัตถุดิบเหล่านี้คำนวณต้นทุนใหม่ให้แล้ว');
@@ -1442,7 +1496,7 @@ function compHTML(m,c){
         <div class="top">
           <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--muted)"><input type="radio" name="sel-${c.id}" ${o.id===c.sel?'checked':''} onchange="updVar('${m.id}','${c.id}','sel','${o.id}')"> ใช้</label>
           <input class="cname" style="flex:1;min-width:0" value="${esc(o.name)}" placeholder="เช่น โนโกะ / Tenju" oninput="updVarOpt('${m.id}','${c.id}','${o.id}','name',this.value)">
-          <input list="${odlid}" value="${esc(ovName)}" placeholder="พิมพ์ค้นหาคลัง / กำหนดราคาเอง" onchange="pickVarIng('${m.id}','${c.id}','${o.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px"><datalist id="${odlid}">${ingDataOpts()}</datalist>
+          <input data-ipick="1" autocomplete="off" value="${esc(ovName)}" placeholder="พิมพ์ค้นหาคลัง / กำหนดราคาเอง" onchange="pickVarIng('${m.id}','${c.id}','${o.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 7px;font-family:inherit;font-size:13px"><datalist id="${odlid}">${ingDataOpts()}</datalist>
           <span class="cc" id="optpu-${o.id}" style="font-size:12px">฿${fmt(optPerUnit(o))}/น.</span>
           <button class="del" onclick="delVarOpt('${m.id}','${c.id}','${o.id}')">✕</button>
         </div>${custom}
@@ -1470,7 +1524,7 @@ function compHTML(m,c){
        </div>`;
   return `<div class="comp">
     <div class="top"><span class="badge s">วัตถุดิบ</span>
-      <input list="${dlid}" value="${esc(ingName)}" placeholder="พิมพ์ค้นหาวัตถุดิบ / กำหนดเอง" onchange="pickIng('${m.id}','${c.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:14px;font-weight:600">
+      ${ingThumb(c.catId)}<input data-ipick="1" autocomplete="off" value="${esc(ingName)}" placeholder="พิมพ์ค้นหาวัตถุดิบ / กำหนดเอง" onchange="pickIng('${m.id}','${c.id}',this.value)" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:14px;font-weight:600">
       <datalist id="${dlid}">${ingDataOpts()}</datalist>
       <button class="del" onclick="delComp('${m.id}','${c.id}')">✕</button></div>
     ${detail}
@@ -2326,6 +2380,7 @@ document.getElementById('reserveOverlay').addEventListener('click',e=>{if(e.targ
 
 load();
 render();
+mbLoadPics().then(()=>{if(Object.keys(mbPics).length)render();});
 </script>
 </body>
 </html>
