@@ -1301,19 +1301,22 @@ async function mbLoadPics(){
 function mbNoteOf(id){const L=state.mbLinks||{};for(const k in L)if(L[k].id===id)return k;return '';}
 function mbPicFor(c){if(!c)return '';const n=mbNoteOf(c.id);return (n&&mbPics[n])||mbPics[(c.name||'').trim()]||'';}
 function catPic(c){return c?(c.image||mbPicFor(c)):'';}
-function ingThumb(catId){const p=catPic(catId?getIngCat(catId):null);return p?`<img src="${p}" class="ithumb" alt="" onclick="ipZoom(this.src)">`:'';}
+function ingThumb(catId,key){const p=catPic(catId?catArr(key||'ing').find(x=>x.id===catId):null);return p?`<img src="${p}" class="ithumb" alt="" onclick="ipZoom(this.src)">`:'';}
 function ipZoom(src){const w=window.open('');if(w)w.document.write('<img src="'+src+'" style="max-width:100%">');}
 // Ingredient picker with photos, price and where/when it was last bought (replaces the plain browser list)
 let ipEl=null,ipInput=null,ipIdx=0,ipList=[];
-function ipMeta(c){return '฿'+fmt(ingCatPerUnit(c))+'/หน่วย'+(c.mbDate?' · ซื้อล่าสุด '+c.mbDate+(c.mbShop?' '+c.mbShop:''):'');}
+function ipMeta(c,key){return '฿'+fmt(key==='pack'?catPerPiece(c):key==='other'?otherPerUnit(c):ingCatPerUnit(c))+(key==='pack'?'/ชิ้น':'/หน่วย')+(c.mbDate?' · ซื้อล่าสุด '+c.mbDate+(c.mbShop?' '+c.mbShop:''):'');}
 function ipShow(inp){
   ipInput=inp;if(!ipEl){ipEl=document.createElement('div');ipEl.className='ipick';document.body.appendChild(ipEl);
     ipEl.addEventListener('mousedown',e=>{const o=e.target.closest('.o');if(!o)return;e.preventDefault();ipChoose(+o.dataset.i);});}
-  const q=mbNorm(inp.value),all=(state.ingCatalog||[]).slice().sort(byName);
-  ipList=(q&&!all.some(c=>mbNorm(c.name)===q)?all.filter(c=>mbNorm(c.name).includes(q)):all).slice(0,80);
+  // data-ipick: ing (default) / pack / all (bases and every catalog, as in the catering job list)
+  const mode=inp.dataset.ipick,q=mbNorm(inp.value);
+  const all=(mode==='all'?[...(state.bases||[]).map(b=>({c:{name:'🧪 '+(b.name||'เบส')},k:'base',u:basePerUnit(b)})),...['ing','pack','other'].flatMap(k=>catArr(k).map(c=>({c,k})))]
+    :catArr(mode==='pack'?'pack':'ing').map(c=>({c,k:mode==='pack'?'pack':'ing'}))).sort((a,b)=>byName(a.c,b.c));
+  ipList=(q&&!all.some(x=>mbNorm(x.c.name)===q)?all.filter(x=>mbNorm(x.c.name).includes(q)):all).slice(0,80);
   if(!ipList.length){ipHide();return;}
   ipIdx=Math.min(ipIdx,ipList.length-1);
-  ipEl.innerHTML=ipList.map((c,i)=>{const p=catPic(c);return `<div class="o${i===ipIdx?' on':''}" data-i="${i}">${p?`<img class="th" src="${p}" alt="">`:'<span class="th">📷</span>'}<div><div class="n">${esc(c.name)}</div><div class="m">${esc(ipMeta(c))}</div></div></div>`;}).join('');
+  ipEl.innerHTML=ipList.map(({c,k,u},i)=>{const p=k==='base'?'':catPic(c);return `<div class="o${i===ipIdx?' on':''}" data-i="${i}">${p?`<img class="th" src="${p}" alt="">`:'<span class="th">📷</span>'}<div><div class="n">${esc(c.name)}</div><div class="m">${esc(k==='base'?'฿'+fmt(u)+'/หน่วย':ipMeta(c,k))}</div></div></div>`;}).join('');
   const r=inp.getBoundingClientRect(),below=window.innerHeight-r.bottom,w=Math.max(r.width,300);
   ipEl.style.left=Math.max(4,Math.min(r.left,window.innerWidth-w-4))+'px';ipEl.style.width=Math.min(w,window.innerWidth-8)+'px';
   if(below<220&&r.top>below){ipEl.style.top='';ipEl.style.bottom=(window.innerHeight-r.top+4)+'px';ipEl.style.maxHeight=Math.min(340,r.top-8)+'px';}
@@ -1321,7 +1324,7 @@ function ipShow(inp){
   ipEl.style.display='block';
 }
 function ipHide(){if(ipEl)ipEl.style.display='none';}
-function ipChoose(i){const c=ipList[i],inp=ipInput;if(!c||!inp)return;inp.value=c.name;ipHide();inp.dispatchEvent(new Event('change',{bubbles:true}));}
+function ipChoose(i){const x=ipList[i],inp=ipInput;if(!x||!inp)return;inp.value=x.c.name;ipHide();inp.dispatchEvent(new Event('change',{bubbles:true}));}
 document.addEventListener('focusin',e=>{if(e.target.matches&&e.target.matches('input[data-ipick]')){ipIdx=0;ipShow(e.target);}});
 document.addEventListener('input',e=>{if(e.target===ipInput){ipIdx=0;ipShow(e.target);}});
 document.addEventListener('focusout',e=>{if(e.target===ipInput)setTimeout(ipHide,150);});
@@ -1538,8 +1541,8 @@ function packCardHTML(m,p){
   const pnm=p.catId?((getCat(p.catId)||{}).name||''):(p.name||'');
   const dlid='packdl-'+p.id;
   const head=`<div class="top"><span class="badge s">แพ็ก</span>
-      <div class="ac" style="flex:1;min-width:0;position:relative">
-        <input class="ac-inp" autocomplete="off" value="${esc(pnm)}" placeholder="พิมพ์ค้นหาบรรจุภัณฑ์ / กำหนดเอง" oninput="acPackOpen('${m.id}','${p.id}',this)" onfocus="acPackOpen('${m.id}','${p.id}',this)" onchange="pickPack('${m.id}','${p.id}',this.value)" onblur="acHide(this)" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:14px;font-weight:600">
+      ${ingThumb(p.catId,'pack')}<div class="ac" style="flex:1;min-width:0;position:relative">
+        <input data-ipick="pack" autocomplete="off" value="${esc(pnm)}" placeholder="พิมพ์ค้นหาบรรจุภัณฑ์ / กำหนดเอง" onchange="pickPack('${m.id}','${p.id}',this.value)" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:14px;font-weight:600">
         <div class="ac-list" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;z-index:30;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(80,60,40,.18);max-height:230px;overflow:auto"></div>
       </div>
       <button class="del" onclick="delPack('${m.id}','${p.id}')">✕</button></div>`;
@@ -1566,7 +1569,7 @@ function addonItemRow(m,a,it){
      <input type="number" min="0" step="any" value="${it.pkgPrice||''}" placeholder="ราคาแพ็ก" oninput="updAddonItem('${m.id}','${a.id}','${it.id}','pkgPrice',this.value)" style="width:74px;border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:12px;text-align:right">
      <input type="number" min="0" step="any" value="${it.pkgQty||''}" placeholder="ปริมาณ/แพ็ก" oninput="updAddonItem('${m.id}','${a.id}','${it.id}','pkgQty',this.value)" style="width:74px;border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:12px;text-align:right">`;
   return `<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin:3px 0">
-    <input list="${adl}" value="${esc(itName)}" placeholder="พิมพ์ค้นหาบรรจุภัณฑ์ / กำหนดเอง" onchange="pickAddonItem('${m.id}','${a.id}','${it.id}',this.value)" style="flex:1;min-width:120px;border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:12px"><datalist id="${adl}">${packDataOptsName()}</datalist>
+    ${ingThumb(it.catId,'pack')}<input data-ipick="pack" autocomplete="off" value="${esc(itName)}" placeholder="พิมพ์ค้นหาบรรจุภัณฑ์ / กำหนดเอง" onchange="pickAddonItem('${m.id}','${a.id}','${it.id}',this.value)" style="flex:1;min-width:120px;border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:12px"><datalist id="${adl}">${packDataOptsName()}</datalist>
     ${custom}
     <span style="font-size:11px;color:var(--muted)">×</span><input type="number" min="0" step="any" value="${it.qty||''}" placeholder="จำนวน" title="จำนวน" oninput="updAddonItem('${m.id}','${a.id}','${it.id}','qty',this.value)" style="width:56px;border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-family:inherit;font-size:12px;text-align:right">
     <span class="hint" id="aitem-${it.id}" style="min-width:48px;text-align:right;color:var(--brand);font-weight:600">฿${fmt(addonItemCost(it))}</span>
@@ -2151,7 +2154,7 @@ function renderCateringForm(){
     <button class="btn-danger btn-sm" onclick="cjDelExtra(${i})" title="ลบ">✕</button>
   </div>`).join('');
   const rows=j.items.map((it,i)=>`<div style="display:grid;grid-template-columns:1.8fr auto auto auto auto;gap:6px;align-items:end;margin-bottom:6px">
-    <div class="fld" style="min-width:0"><label>รายการ</label><input list="${dl}" value="${esc(it.name||'')}" placeholder="พิมพ์ค้นหาคลัง / กรอกเอง" onchange="cjPickItem(${i},this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:13px"></div>
+    <div class="fld" style="min-width:0"><label>รายการ</label><input data-ipick="all" autocomplete="off" value="${esc(it.name||'')}" placeholder="พิมพ์ค้นหาคลัง / กรอกเอง" onchange="cjPickItem(${i},this.value)" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:13px"></div>
     <div class="fld"><label>ราคา/หน่วย ฿</label><input type="number" min="0" step="any" style="width:90px;text-align:right" value="${it.unitCost}" oninput="cjSetItem(${i},'unitCost',this.value)"></div>
     <div class="fld"><label>จำนวน/ชุด</label><input type="number" min="0" step="any" style="width:80px;text-align:right" value="${it.qty}" oninput="cjSetItem(${i},'qty',this.value)"></div>
     <div class="fld"><label>รวม/ชุด</label><span id="cjline-${i}" style="font-weight:600;color:var(--brand);padding:6px 0;display:inline-block">฿${fmt(num(it.unitCost)*num(it.qty))}</span></div>
