@@ -1551,7 +1551,7 @@ function packCardHTML(m,p){
     : `<div class="pk"><div class="f"><label>ราคาแพ็ก</label><input type="number" min="0" step="any" value="${p.pkgPrice||''}" placeholder="0" oninput="updPack('${m.id}','${p.id}','pkgPrice',this.value)"></div>
        <div class="f"><label>จำนวน/แพ็ก</label><input type="number" min="0" step="any" value="${p.pkgQty||''}" placeholder="0" oninput="updPack('${m.id}','${p.id}','pkgQty',this.value)"></div></div>`;
   const qty=`<div class="qty">
-      <div class="f"><label>ใช้/แก้ว${b?' (ไม่ปั่น)':''}</label><input type="number" min="0" step="any" value="${p.useQty||''}" placeholder="0" oninput="updPack('${m.id}','${p.id}','useQty',this.value)"></div>
+      <div class="f"><label>${m.type==='dessert'?'ใช้ต่อชิ้น':'ใช้/แก้ว'}${b?' (ไม่ปั่น)':''}</label><input type="number" min="0" step="any" value="${p.useQty||''}" placeholder="0" oninput="updPack('${m.id}','${p.id}','useQty',this.value)"></div>
       ${b?`<div class="f"><label>🌀 ใช้/แก้ว (ปั่น)</label><input type="number" min="0" step="any" value="${p.buseQty||''}" placeholder="0" oninput="updPack('${m.id}','${p.id}','buseQty',this.value)"></div>`:''}
       <span class="cc" id="pcc-${p.id}">฿${fmt(packLineCost(p,false))}</span>
       ${b?`<span class="cc" id="pccb-${p.id}" style="color:var(--base)">🌀฿${fmt(packLineCost(p,true))}</span>`:''}
