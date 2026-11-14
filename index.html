@@ -576,9 +576,10 @@ function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{
 // ---------- cost math ----------
 function lineCost(i){const pp=num(i.pkgPrice),pq=num(i.pkgQty),uq=num(i.useQty);return pq>0?(pp/pq)*uq:0;}
 // ---------- units: g/kg, ml/l/tsp/tbsp (1 ml ≈ 1 g), ชิ้น ----------
-const UNITS=['g','kg','ml','l','tsp','tbsp','ชิ้น'];
-const UNIT_F={g:1,kg:1000,ml:1,l:1000,tsp:5,tbsp:15,'ชิ้น':1};
-function unitConv(use,stock){if(!use||use===stock)return 1;if((use==='ชิ้น')!==(stock==='ชิ้น'))return 1;return (UNIT_F[use]||1)/(UNIT_F[stock]||1);}
+const UNITS=['g','kg','ml','l','tsp','tbsp','ชิ้น','ฟอง'];
+const UNIT_F={g:1,kg:1000,ml:1,l:1000,tsp:5,tbsp:15,'ชิ้น':1,'ฟอง':1};
+const COUNT_UNITS=['ชิ้น','ฟอง'];
+function unitConv(use,stock){if(!use||use===stock)return 1;if(COUNT_UNITS.includes(use)!==COUNT_UNITS.includes(stock))return 1;return (UNIT_F[use]||1)/(UNIT_F[stock]||1);}
 function unitOpts(sel,blank){return `<option value="">${blank}</option>`+UNITS.map(u=>`<option value="${u}" ${u===sel?'selected':''}>${u}</option>`).join('');}
 function unitLabel(u){return u||'หน่วย';}
 function rowStockUnit(r){if(r.catId){const ic=(state.ingCatalog||[]).find(c=>c.id===r.catId);return ic?(ic.unit||''):'';}return r.pkgUnit||'';}
